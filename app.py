@@ -31,11 +31,13 @@ def bootstrap_correlations(df, n_iterations=500, method='pearson', progress_bar=
         df_resampled = resample(df)
         corr_matrix = df_resampled.corr(method=method)
         correlations.append(corr_matrix)
+
+        # Update progress bar and status
         if progress_bar and status_text:
-            # Calculate incremental progress
             progress = start_progress + (i + 1) / n_iterations * (end_progress - start_progress)
             progress_bar.progress(int(progress * 100))
-            status_text.text(f"Bootstrapping Correlations... ({i+1}/{n_iterations})")
+            status_text.text(f"Bootstrapping {method.capitalize()} Correlations... ({i+1}/{n_iterations})")
+
     median_corr = pd.concat(correlations).groupby(level=0).median()
     return median_corr
 
@@ -88,25 +90,39 @@ def remove_outliers_zscore(df, threshold=3):
     return filtered_df
 
 def validate_correlation_matrix(df, n_iterations=500, alpha=0.05, progress_bar=None, status_text=None, start_progress=0.0, end_progress=0.4):
-    st.write(f"DataFrame shape: {df.shape}")
     """
     Validate correlations using bootstrapping and p-value correction.
     Returns a filtered correlation matrix with only significant values.
     """
+    st.write(f"DataFrame shape: {df.shape}")
     st.write("Bootstrapping correlation matrices...")
 
     # Ensure all columns are numeric
     df = df.apply(pd.to_numeric, errors='coerce')
     df = df.dropna(axis=1, how='all')  # Drop columns that are entirely non-numeric or NaN
 
-    # Bootstrap Pearson
-    pearson_corr = bootstrap_correlations(df, n_iterations=n_iterations, method='pearson', progress_bar=progress_bar, status_text=status_text, start_progress=start_progress, end_progress=start_progress + (end_progress - start_progress)/3)
+    # Bootstrap Pearson correlations
+    pearson_corr = bootstrap_correlations(
+        df, n_iterations=n_iterations, method='pearson', 
+        progress_bar=progress_bar, status_text=status_text, 
+        start_progress=start_progress, end_progress=start_progress + (end_progress - start_progress) / 3
+    )
 
-    # Bootstrap Spearman
-    spearman_corr = bootstrap_correlations(df, n_iterations=n_iterations, method='spearman', progress_bar=progress_bar, status_text=status_text, start_progress=start_progress + (end_progress - start_progress)/3, end_progress=start_progress + 2*(end_progress - start_progress)/3)
+    # Bootstrap Spearman correlations
+    spearman_corr = bootstrap_correlations(
+        df, n_iterations=n_iterations, method='spearman', 
+        progress_bar=progress_bar, status_text=status_text, 
+        start_progress=start_progress + (end_progress - start_progress) / 3, 
+        end_progress=start_progress + 2 * (end_progress - start_progress) / 3
+    )
 
-    # Bootstrap Kendall
-    kendall_corr = bootstrap_correlations(df, n_iterations=n_iterations, method='kendall', progress_bar=progress_bar, status_text=status_text, start_progress=start_progress + 2*(end_progress - start_progress)/3, end_progress=end_progress)
+    # Bootstrap Kendall correlations
+    kendall_corr = bootstrap_correlations(
+        df, n_iterations=n_iterations, method='kendall', 
+        progress_bar=progress_bar, status_text=status_text, 
+        start_progress=start_progress + 2 * (end_progress - start_progress) / 3, 
+        end_progress=end_progress
+    )
 
     # Average the correlation matrices
     avg_corr_matrix = (pearson_corr + spearman_corr + kendall_corr) / 3
@@ -121,6 +137,7 @@ def validate_correlation_matrix(df, n_iterations=500, alpha=0.05, progress_bar=N
     st.write("Correlation matrix validated and filtered based on significance.")
     return filtered_corr_matrix
 
+
 # -------------------------------
 # Visualization Functions
 # -------------------------------
@@ -130,7 +147,11 @@ def generate_heatmap(df, title, labels, progress_bar, status_text, start_progres
     Generate a heatmap and return the filtered correlation matrix.
     Update progress incrementally during processing.
     """
-    filtered_corr_matrix = validate_correlation_matrix(df, progress_bar=progress_bar, status_text=status_text, start_progress=start_progress, end_progress=end_progress)
+    # Validate correlation matrix with progress updates
+    filtered_corr_matrix = validate_correlation_matrix(
+        df, progress_bar=progress_bar, status_text=status_text, 
+        start_progress=start_progress, end_progress=end_progress
+    )
     parameter_order = sorted(filtered_corr_matrix.index)
     filtered_corr_matrix = filtered_corr_matrix.loc[parameter_order, parameter_order]
 
@@ -143,7 +164,8 @@ def generate_heatmap(df, title, labels, progress_bar, status_text, start_progres
         color_continuous_scale="RdBu",
         zmin=-1,
         zmax=1,
-        labels={"x": labels[0], "y": labels[1], "color": "Correlation Coefficient"},
+        # Use generic axis labels to fix hover text issue
+        labels={"x": "X-Axis", "y": "Y-Axis", "color": "Correlation Coefficient"},
         title=title,
     )
 
@@ -165,6 +187,7 @@ def generate_heatmap(df, title, labels, progress_bar, status_text, start_progres
 
     st.plotly_chart(fig)
     return filtered_corr_matrix
+
 
 def generate_network_diagram_streamlit(labels, correlation_matrices, parameters, globally_shared=True, progress_bar=None, status_text=None, start_progress=0.0, end_progress=0.3):
     """
