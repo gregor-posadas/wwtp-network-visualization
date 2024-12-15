@@ -18,6 +18,7 @@ from matplotlib.offsetbox import DrawingArea, TextArea, HPacker, VPacker, Annota
 import seaborn as sns
 import matplotlib
 from io import StringIO
+st.write(f"Streamlit version: {st.__version__}")
 
 # Prevent matplotlib from trying to use any Xwindows backend.
 matplotlib.use('Agg')
@@ -958,8 +959,6 @@ def main():
     # -------------------------------
     st.subheader("Upload and Arrange Your Data Files")
     st.write("Drag and drop your CSV or Excel files below, then arrange them in the desired order and assign labels.")
-
-    # Streamlit doesn't have native drag-and-drop reordering. We can simulate it using checkbox and reordering via Streamlit's interactive widgets.
 
     uploaded_files = st.file_uploader(
         "Upload CSV or Excel Files",
