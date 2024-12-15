@@ -90,6 +90,9 @@ def remove_outliers_zscore(df, threshold=3):
     """
     st.write("Applying Z-Score Method to filter outliers...")
     numeric_cols = df.select_dtypes(include=[np.number]).columns
+    if len(numeric_cols) == 0:
+        st.warning("No numeric columns found to apply Z-Score filtering.")
+        return df
     z_scores = np.abs(stats.zscore(df[numeric_cols], nan_policy="omit"))
     mask = (z_scores < threshold).all(axis=1)
     filtered_df = df[mask]
@@ -107,6 +110,10 @@ def validate_correlation_matrix(df, n_iterations=500, alpha=0.05, progress_bar=N
     # Ensure all columns are numeric
     df = df.apply(pd.to_numeric, errors='coerce')
     df = df.dropna(axis=1, how='all')  # Drop columns that are entirely non-numeric or NaN
+
+    if df.empty:
+        st.error("No numeric data available after removing non-numeric columns and NaN values.")
+        return pd.DataFrame()
 
     # Bootstrap Pearson correlations
     pearson_corr = bootstrap_correlations(
@@ -166,6 +173,10 @@ def generate_heatmap(df, title, labels, container):
             start_progress=0.0, end_progress=0.4
         )
         
+        if filtered_corr_matrix.empty:
+            st.warning("Cannot generate heatmap due to empty correlation matrix.")
+            return filtered_corr_matrix
+        
         parameter_order = sorted(filtered_corr_matrix.index)
         filtered_corr_matrix = filtered_corr_matrix.loc[parameter_order, parameter_order]
     
@@ -200,8 +211,6 @@ def generate_heatmap(df, title, labels, container):
             xaxis=dict(tickangle=45, title=None, tickfont=dict(size=12)),
             yaxis=dict(title=None, tickfont=dict(size=12)),
             autosize=True,
-            width=800,
-            height=600,
             margin=dict(l=100, r=100, t=100, b=100),
         )
     
@@ -978,7 +987,8 @@ def main():
         
         # Sort files based on the assigned order
         file_order_sorted = file_order.sort_values('Order').reset_index(drop=True)
-        sorted_files = [file for file in uploaded_files if file.name in file_order_sorted['Filename'].values]
+        sorted_filenames = file_order_sorted['Filename']
+        sorted_files = [file for filename in sorted_filenames for file in uploaded_files if file.name == filename]
         
         # -------------------------------
         # Confirmation Prompt
@@ -1153,9 +1163,10 @@ def main():
                 progress_increment=targeted_network_progress_fraction
             )
     
-    # -------------------------------
-    # Run the Streamlit App
-    # -------------------------------
-    
-    if __name__ == "__main__":
-        main()
+
+# -------------------------------
+# Run the Streamlit App
+# -------------------------------
+
+if __name__ == "__main__":
+    main()
