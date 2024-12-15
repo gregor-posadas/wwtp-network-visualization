@@ -176,6 +176,8 @@ def generate_heatmap(df, title, labels, container):
         
         if filtered_corr_matrix.empty:
             st.warning("Cannot generate heatmap due to empty correlation matrix.")
+            heatmap_bar.progress(100)
+            heatmap_progress.text("Heatmap generation incomplete due to insufficient data.")
             return filtered_corr_matrix
         
         parameter_order = sorted(filtered_corr_matrix.index)
@@ -1014,12 +1016,12 @@ def main():
                         df = pd.read_excel(uploaded_file)
                     else:
                         df = pd.read_csv(uploaded_file)
-    
+
                     df.columns = df.columns.str.lower().str.strip()
                     if 'date' not in df.columns:
                         st.error(f"The file **{uploaded_file.name}** does not contain a 'date' column.")
                         st.stop()
-    
+
                     df['date'] = pd.to_datetime(df['date'], errors='coerce')
                     df = df.dropna(subset=["date"])
                     df = remove_outliers_zscore(df)
@@ -1027,31 +1029,31 @@ def main():
                 except Exception as e:
                     st.error(f"Error processing file **{uploaded_file.name}**: {e}")
                     st.stop()
-    
+
             if len(dataframes) < 2:
                 st.warning("Please upload at least two files to generate diagrams.")
                 st.stop()
-    
+
             # Identify common parameters
             common_params = find_common_parameters(dataframes)
             if not common_params:
                 st.error("No common parameters found across all uploaded files.")
                 st.stop()
-    
+
             st.success(f"Common parameters identified: {', '.join(common_params)}")
-    
+
             # Assign progress fractions
             num_heatmaps = len(dataframes) -1
             heatmap_progress_fraction = 0.4  # 40%
             heatmap_step = heatmap_progress_fraction / num_heatmaps
-    
+
             network_diagram_progress_fraction = 0.3  # 30%
             network_diagram_step = network_diagram_progress_fraction / 2  # Two diagrams
-    
+
             bar_chart_progress_fraction = 0.1  # 10%
             line_graph_progress_fraction = 0.1  # 10%
             targeted_network_progress_fraction = 0.1  # 10%
-    
+
             # Generate heatmaps and store correlation matrices
             correlation_matrices = []
             parameters_per_edge = []
@@ -1066,7 +1068,7 @@ def main():
                  .replace([np.inf, -np.inf], np.nan) \
                  .dropna() \
                  .select_dtypes(include=[np.number])
-    
+
                 filtered_corr_matrix = generate_heatmap(
                     df=merged_df,
                     title=f"Correlation Coefficient Heatmap: {sorted_labels[i]} vs {sorted_labels[i + 1]}",
@@ -1074,7 +1076,7 @@ def main():
                     container=heatmap_container
                 )
                 correlation_matrices.append(filtered_corr_matrix)
-    
+
                 # Identify parameters contributing to the correlation
                 shared_params = []
                 for param in common_params:
@@ -1084,17 +1086,17 @@ def main():
                         if filtered_corr_matrix.loc[infl_param, ode_param] != 0:
                             shared_params.append(param)
                 parameters_per_edge.append(shared_params)
-    
+
             # Identify globally shared parameters
             globally_shared_parameters = set(parameters_per_edge[0])
             for params in parameters_per_edge[1:]:
                 globally_shared_parameters &= set(params)
-    
+
             st.markdown(f"**Globally shared parameters across all node pairs:** {', '.join(globally_shared_parameters) if globally_shared_parameters else 'None'}")
             if not globally_shared_parameters:
                 st.error("No globally shared parameters found.")
                 st.stop()
-    
+
             # Buttons to generate network diagrams and additional visualizations
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -1107,7 +1109,7 @@ def main():
                         container=network_container,
                         globally_shared=True
                     )
-    
+
             with col2:
                 if st.button("Generate Locally Shared Network Diagram"):
                     network_container = st.container()
@@ -1118,7 +1120,7 @@ def main():
                         container=network_container,
                         globally_shared=False
                     )
-    
+
             with col3:
                 if st.button("Generate Bar Chart for Globally Shared Parameters"):
                     bar_chart_container = st.container()
@@ -1129,7 +1131,7 @@ def main():
                         container=bar_chart_container,
                         progress_increment=bar_chart_progress_fraction
                     )
-    
+
             with col4:
                 if st.button("Generate Line Graph for Globally Shared Parameters"):
                     line_graph_container = st.container()
@@ -1140,15 +1142,15 @@ def main():
                         container=line_graph_container,
                         progress_increment=line_graph_progress_fraction
                     )
-    
+
             st.markdown("---")
             st.markdown("### Additional Visualizations:")
             st.write("Use the buttons above to generate network diagrams and correlation summary charts.")
-    
+
             st.markdown("---")
             st.markdown("### Targeted Network Diagram:")
             st.write("Generate a network diagram centered around a specific parameter from a selected process.")
-    
+
             # Integrate the targeted network diagram
             targeted_network_container = st.container()
             generate_targeted_network_diagram_streamlit(
@@ -1157,7 +1159,6 @@ def main():
                 container=targeted_network_container, 
                 progress_increment=targeted_network_progress_fraction
             )
-    
 
 # -------------------------------
 # Run the Streamlit App
