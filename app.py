@@ -23,6 +23,11 @@ from io import StringIO
 matplotlib.use('Agg')
 
 # -------------------------------
+# Set Page Configuration
+# -------------------------------
+st.set_page_config(page_title="WWTP Network Visualization", layout="wide")
+
+# -------------------------------
 # Data Processing Functions
 # -------------------------------
 
@@ -901,10 +906,13 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, cont
             targeted_progress.text("Targeted Network Diagram generated.")
 
 # -------------------------------
-# Main Streamlit App
+# Run the Streamlit App
 # -------------------------------
 
 def main():
+    # Optional: Display Streamlit version for debugging
+    st.write(f"Streamlit version: {st.__version__}")
+    
     st.title("WWTP Unit Processes Network Visualization")
     st.write("""
     Welcome to the WWTP (Waste Water Treatment Plant) Unit Processes Network Visualization tool. 
