@@ -182,16 +182,16 @@ def generate_heatmap(df, title, labels, container):
         
         parameter_order = sorted(filtered_corr_matrix.index)
         filtered_corr_matrix = filtered_corr_matrix.loc[parameter_order, parameter_order]
-    
+
         np.fill_diagonal(filtered_corr_matrix.values, 1)
-    
+
         # Check if the correlation matrix has valid data
         if filtered_corr_matrix.empty or filtered_corr_matrix.isnull().all().all():
             st.warning("Correlation matrix is empty or contains only NaN values.")
             heatmap_bar.progress(100)
             heatmap_progress.text("Heatmap generation incomplete due to insufficient data.")
             return filtered_corr_matrix
-    
+
         fig = px.imshow(
             filtered_corr_matrix,
             text_auto=".2f",
@@ -202,7 +202,7 @@ def generate_heatmap(df, title, labels, container):
             labels={"x": "X-Axis", "y": "Y-Axis", "color": "Correlation Coefficient"},
             title=title,
         )
-    
+
         fig.update_layout(
             title=dict(
                 text=title,
@@ -216,7 +216,7 @@ def generate_heatmap(df, title, labels, container):
             autosize=True,
             margin=dict(l=100, r=100, t=100, b=100),
         )
-    
+
         st.plotly_chart(fig, use_container_width=True)
         
         # Complete progress
@@ -248,14 +248,16 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
     
         total_connections = len(labels) -1
         heatmap_progress_increment = 0.4  # From heatmaps
-        network_progress_increment = 0.3  # 30% of total
+        network_progress_increment = 0.3  # 30%
         bar_chart_progress_increment = 0.1
         line_graph_progress_increment = 0.1
         targeted_network_progress_increment = 0.1
     
         # Collect and add edges based on significant correlations
-        num_edges = len(correlation_matrices)
-        for i in range(num_edges):
+        num_edges_total = len(correlation_matrices)
+        curvature_values = np.linspace(-0.5, 0.5, num_edges_total)  # Adjusted for better curvature
+    
+        for i in range(num_edges_total):
             st.write(f"Processing connection: {labels[i]} → {labels[i + 1]}")
     
             # Retrieve the filtered correlation matrix for this pair
@@ -365,9 +367,6 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
             return adjusted_color
     
         # Draw edges with curvature to avoid overlaps
-        num_edges_total = len(G.edges(keys=True))
-        curvature_values = np.linspace(-0.5, 0.5, num_edges_total)  # Adjusted for better curvature
-    
         for idx, (u, v, key, d) in enumerate(G.edges(data=True, keys=True)):
             curvature = curvature_values[idx] if num_edges_total > 1 else 0.2
             corr_value = d['correlation']
@@ -469,13 +468,13 @@ def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_
         data = {param: [] for param in globally_shared_parameters}
         process_pairs = []
     
-        num_process_pairs = len(correlation_matrices)
+        num_process_pairs = len(process_labels) -1
         num_parameters = len(globally_shared_parameters)
         total_steps = num_process_pairs * num_parameters
         step = 0
     
         # Collect correlation data for each process pair
-        for i, matrix in enumerate(correlation_matrices):
+        for i in range(num_process_pairs):
             pair_label = f"{process_labels[i]} → {process_labels[i + 1]}"
             process_pairs.append(pair_label)
     
@@ -483,11 +482,13 @@ def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_
                 infl_param = f"{param}_{process_labels[i]}"
                 ode_param = f"{param}_{process_labels[i + 1]}"
     
-                if infl_param in matrix.index and ode_param in matrix.columns:
-                    corr_value = matrix.loc[infl_param, ode_param]
-                    data[param].append(corr_value)
+                # Retrieve the correlation value from the correlation_matrices
+                if infl_param in correlation_matrices[i].index and ode_param in correlation_matrices[i].columns:
+                    corr_value = correlation_matrices[i].loc[infl_param, ode_param]
                 else:
-                    data[param].append(0)  # Fill missing correlations with 0
+                    corr_value = 0  # Assign 0 if correlation is not found
+    
+                data[param].append(corr_value)
                 step +=1
                 progress = (step / total_steps) * progress_increment * 100
                 bar_chart_bar.progress(int(progress))
@@ -503,6 +504,8 @@ def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_
         ymax += margin
     
         # Plot bar chart
+        fig, ax = plt.subplots(figsize=(14, 8))
+    
         num_process_pairs = len(process_pairs)
         num_parameters = len(globally_shared_parameters)
         total_bar_width = 0.8  # Total width for all bars at one x position
@@ -510,9 +513,6 @@ def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_
     
         x = np.arange(num_process_pairs)  # Positions of the process pairs
     
-        fig, ax = plt.subplots(figsize=(14, 8))
-    
-        # Plot bars
         for i, (param, correlations) in enumerate(sorted(data.items())):
             offset = (i - (num_parameters - 1) / 2) * bar_width
             x_positions = x + offset
@@ -573,13 +573,13 @@ def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation
         data = {param: [] for param in globally_shared_parameters}
         process_pairs = []
     
-        num_process_pairs = len(correlation_matrices)
+        num_process_pairs = len(process_labels) -1
         num_parameters = len(globally_shared_parameters)
         total_steps = num_process_pairs * num_parameters
         step = 0
     
         # Collect correlation data for each process pair
-        for i, matrix in enumerate(correlation_matrices):
+        for i in range(num_process_pairs):
             pair_label = f"{process_labels[i]} → {process_labels[i + 1]}"
             process_pairs.append(pair_label)
     
@@ -587,11 +587,13 @@ def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation
                 infl_param = f"{param}_{process_labels[i]}"
                 ode_param = f"{param}_{process_labels[i + 1]}"
     
-                if infl_param in matrix.index and ode_param in matrix.columns:
-                    corr_value = matrix.loc[infl_param, ode_param]
-                    data[param].append(corr_value)
+                # Retrieve the correlation value from the correlation_matrices
+                if infl_param in correlation_matrices[i].index and ode_param in correlation_matrices[i].columns:
+                    corr_value = correlation_matrices[i].loc[infl_param, ode_param]
                 else:
-                    data[param].append(0)  # Fill missing correlations with 0
+                    corr_value = 0  # Assign 0 if correlation is not found
+    
+                data[param].append(corr_value)
                 step +=1
                 progress = (step / total_steps) * progress_increment * 100
                 line_graph_bar.progress(int(progress))
