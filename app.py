@@ -884,7 +884,7 @@ def main():
     add_css()
 
     # Add the main title
-    st.markdown("<h1 style='text-align: center; color: #0e76a8;'>WWTP Unit Processes Network Visualization</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color:rgb(0, 0, 0);'>WWTP Unit Processes Network Visualization</h1>", unsafe_allow_html=True)
     
     # -------------------------------
     # 1. Instructions Section
@@ -902,7 +902,7 @@ def main():
     
     5. **Targeted Network Diagram:** Use the section below to generate a network diagram centered around a specific parameter from a selected process.
     
-    Enjoy exploring your WWTP unit processes!
+    
     """, unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
