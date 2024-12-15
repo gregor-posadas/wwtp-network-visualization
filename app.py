@@ -22,31 +22,6 @@ import matplotlib
 matplotlib.use('Agg')
 
 # -------------------------------
-# Custom CSS for Styling
-# -------------------------------
-
-def local_css():
-    st.markdown(
-        """
-        <style>
-        .section {
-            border: 2px solid black;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-            background-color: #f9f9f9;
-        }
-        .section-title {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
-# -------------------------------
 # Data Processing Functions
 # -------------------------------
 
@@ -177,7 +152,7 @@ def generate_heatmap(df, title, labels, progress_bar, status_text, start_progres
 
     np.fill_diagonal(filtered_corr_matrix.values, 1)
 
-    st.markdown(f"<div class='section'><div class='section-title'>{title}</div>", unsafe_allow_html=True)
+    st.subheader(title)
     fig = px.imshow(
         filtered_corr_matrix,
         text_auto=".2f",
@@ -204,8 +179,7 @@ def generate_heatmap(df, title, labels, progress_bar, status_text, start_progres
         margin=dict(l=100, r=100, t=100, b=100),
     )
 
-    st.plotly_chart(fig, use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.plotly_chart(fig)
     return filtered_corr_matrix
 
 def generate_network_diagram_streamlit(labels, correlation_matrices, parameters, globally_shared=True, progress_bar=None, status_text=None, start_progress=0.0, end_progress=1.0):
@@ -217,7 +191,7 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
     G = nx.MultiGraph()
     diagram_type = "Globally Shared" if globally_shared else "Locally Shared"
 
-    st.markdown(f"<div class='section'><div class='section-title'>{diagram_type} Network Diagram</div>", unsafe_allow_html=True)
+    st.subheader(f"{diagram_type} Network Diagram")
 
     # Collect data for edge summary boxes
     edge_summaries = []
@@ -285,7 +259,6 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
 
     if G.number_of_nodes() == 0:
         st.warning("No nodes to display in the network diagram.")
-        st.markdown("</div>", unsafe_allow_html=True)
         return
 
     # Create a figure with GridSpec: 2 rows (network diagram and text boxes)
@@ -314,7 +287,7 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
         formatted_labels[node] = wrapped_label
 
     # Draw labels with formatted labels
-    nx.draw_networkx_labels(G, pos, labels=formatted_labels, font_size=10, ax=ax_network)
+    nx.draw_networkx_labels(G, pos, labels=formatted_labels, font_size=12, font_weight="bold", ax=ax_network)
 
     # Assign unique colors to parameters
     unique_parameters = list(set(d['parameter'] for u, v, k, d in G.edges(keys=True, data=True)))
@@ -347,7 +320,8 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
 
         # Draw the edge
         nx.draw_networkx_edges(
-            G, pos,
+            G,
+            pos,
             edgelist=[(u, v, key)],
             connectionstyle=f"arc3,rad={curvature}",
             edge_color=[edge_color],
@@ -414,13 +388,12 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
 
     plt.tight_layout()
     st.pyplot(fig)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_matrices, progress_bar, status_text, progress_increment):
     """
     Generate a bar chart summarizing correlations for globally shared parameters across process pairs.
     """
-    st.markdown("<div class='section'><div class='section-title'>Bar Chart: Globally Shared Parameter Correlations</div>", unsafe_allow_html=True)
+    st.write("### Bar Chart: Globally Shared Parameter Correlations")
     
     # Initialize data structure for correlations
     data = {param: [] for param in globally_shared_parameters}
@@ -515,13 +488,12 @@ def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_
     legend.get_frame().set_edgecolor('black')  # Set legend outline color to black
 
     st.pyplot(fig)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation_matrices, progress_bar, status_text, progress_increment):
     """
     Generate a line graph summarizing correlations for globally shared parameters across process pairs.
     """
-    st.markdown("<div class='section'><div class='section-title'>Line Graph: Globally Shared Parameter Correlations</div>", unsafe_allow_html=True)
+    st.write("### Line Graph: Globally Shared Parameter Correlations")
     
     # Initialize data structure for correlations
     data = {param: [] for param in globally_shared_parameters}
@@ -608,15 +580,14 @@ def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation
     legend.get_frame().set_edgecolor('black')  # Set legend outline color to black
 
     st.pyplot(fig)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 def generate_targeted_network_diagram_streamlit(process_labels, dataframes, progress_bar, status_text, progress_increment, n_iterations=500, alpha=0.05):
     """
     Generate a targeted network diagram centered around a selected parameter from a selected process.
     Allows independent adjustment of the significance level (alpha).
     """
-    st.markdown("<div class='section'><div class='section-title'>Targeted Network Diagram</div>", unsafe_allow_html=True)
-    
+    st.write("### Targeted Network Diagram")
+
     # User selects a process
     selected_process_label = st.selectbox(
         "Select a Process:",
@@ -746,7 +717,6 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
             st.warning("No significant correlations found with the selected alpha level.")
             progress_bar.progress(int((0.95 * progress_increment) * 100))
             status_text.text("No significant correlations found.")
-            st.markdown("</div>", unsafe_allow_html=True)
             return
 
         # Prepare data for bar chart
@@ -878,318 +848,270 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
             status_text.text("Targeted Network Diagram generated.")
         except Exception as e:
             st.error(f"Error updating progress bar: {e}")
-    
+
+# -------------------------------
+# Main Streamlit App
+# -------------------------------
+
+def main():
+    st.set_page_config(page_title="WWTP Unit Processes Network Visualization", layout="wide")
+    st.title("WWTP Unit Processes Network Visualization")
+
     # -------------------------------
-    # Main Streamlit App
+    # 1. Instructions Section
     # -------------------------------
-    
-    def main():
-        # Apply custom CSS
-        local_css()
+    st.markdown("""
+    ## Instructions
 
-        st.set_page_config(page_title="WWTP Unit Processes Network Visualization", layout="wide")
-        st.title("WWTP Unit Processes Network Visualization")
+    1. **Upload Files:** Upload your CSV or Excel files containing process data. Ensure each file has a 'date' column.
 
-        # -------------------------------
-        # 1. Instructions Section
-        # -------------------------------
-        st.markdown("""
-        <div class='section'>
-        <div class='section-title'>Instructions</div>
-        <ol>
-            <li><strong>Upload Files:</strong> Upload your CSV or Excel files containing process data. Ensure each file has a 'date' column.</li>
-            <li><strong>Label Processes:</strong> Assign descriptive labels to each uploaded process file.</li>
-            <li><strong>Reorder Processes:</strong> After uploading, assign an order to the processes based on their real-life sequence (upstream to downstream).</li>
-            <li><strong>Generate Visualizations:</strong> Click the buttons to generate correlation heatmaps, network diagrams, bar charts, and line graphs.</li>
-            <li><strong>Targeted Network Diagram:</strong> Use the section below to generate a network diagram centered around a specific parameter from a selected process.</li>
-        </ol>
-        Enjoy exploring your WWTP unit processes!
-        </div>
-        """, unsafe_allow_html=True)
+    2. **Label Processes:** Assign descriptive labels to each uploaded process file.
 
-        # -------------------------------
-        # 2. File Upload and Labeling
-        # -------------------------------
-        uploaded_files = st.file_uploader(
-            "Choose CSV or Excel files",
-            accept_multiple_files=True,
-            type=['csv', 'xlsx', 'xls']
-        )
-        process_labels = []
-        dataframes = []
+    3. **Reorder Processes:** After uploading, assign an order to the processes based on their real-life sequence (upstream to downstream).
 
-        if uploaded_files:
-            for idx, uploaded_file in enumerate(uploaded_files):
-                st.markdown(f"<div class='section'><div class='section-title'>Process File {idx + 1}: {uploaded_file.name}</div>", unsafe_allow_html=True)
-                try:
-                    # Read the uploaded file
-                    if uploaded_file.name.endswith(('.xlsx', '.xls')):
-                        df = pd.read_excel(uploaded_file)
-                    else:
-                        df = pd.read_csv(uploaded_file)
+    4. **Generate Visualizations:** Click the buttons to generate correlation heatmaps, network diagrams, bar charts, and line graphs.
 
-                    df.columns = df.columns.str.lower().str.strip()
-                    if 'date' not in df.columns:
-                        st.error(f"The file **{uploaded_file.name}** does not contain a 'date' column.")
-                        st.markdown("</div>", unsafe_allow_html=True)
-                        st.stop()
+    5. **Targeted Network Diagram:** Use the section below to generate a network diagram centered around a specific parameter from a selected process.
 
-                    df['date'] = pd.to_datetime(df['date'], errors='coerce')
-                    df = df.dropna(subset=["date"])
-                    df = remove_outliers_zscore(df)
-                    dataframes.append(df)
+    Enjoy exploring your WWTP unit processes!
+    """)
 
-                    # Prompt user for a label for this process
-                    label = st.text_input(
-                        f"Enter a label for **{uploaded_file.name}**:",
-                        value=uploaded_file.name.split('.')[0],
-                        key=f"label_{idx}"
-                    )
-                    process_labels.append(label)
-                except Exception as e:
-                    st.error(f"Error processing file **{uploaded_file.name}**: {e}")
-                    st.markdown("</div>", unsafe_allow_html=True)
-                    st.stop()
-                st.markdown("</div>", unsafe_allow_html=True)
+    # -------------------------------
+    # 2. File Upload and Labeling
+    # -------------------------------
+    uploaded_files = st.file_uploader(
+        "Choose CSV or Excel files",
+        accept_multiple_files=True,
+        type=['csv', 'xlsx', 'xls']
+    )
+    process_labels = []
+    dataframes = []
 
-            if len(dataframes) < 2:
-                st.warning("Please upload at least two files to generate diagrams.")
-                st.stop()
+    if uploaded_files:
+        for idx, uploaded_file in enumerate(uploaded_files):
+            st.subheader(f"Process File {idx + 1}: {uploaded_file.name}")
+            try:
+                # Read the uploaded file
+                if uploaded_file.name.endswith(('.xlsx', '.xls')):
+                    df = pd.read_excel(uploaded_file)
+                else:
+                    df = pd.read_csv(uploaded_file)
 
-            # Identify common parameters
-            common_params = find_common_parameters(dataframes)
-            if not common_params:
-                st.error("No common parameters found across all uploaded files.")
-                st.stop()
-
-            st.success(f"Common parameters identified: {', '.join(common_params)}")
-
-            # -------------------------------
-            # 3. Reordering Uploaded Files via Sidebar
-            # -------------------------------
-            with st.sidebar:
-                st.markdown("<div class='section'><div class='section-title'>Reorder Uploaded Files</div>", unsafe_allow_html=True)
-                st.write("Please assign an order to the uploaded files based on their sequence in real life (upstream to downstream).")
-
-                # Initialize list to store order
-                order_numbers = []
-                for idx, file in enumerate(uploaded_files):
-                    order = st.number_input(
-                        f"Order for {file.name}", 
-                        min_value=1, 
-                        max_value=len(uploaded_files), 
-                        value=idx+1, 
-                        step=1, 
-                        key=f"order_sidebar_{idx}"
-                    )
-                    order_numbers.append(order)
-
-                # Validate unique order numbers
-                if len(set(order_numbers)) != len(order_numbers):
-                    st.error("Each file must have a unique order number. Please adjust the order numbers accordingly.")
-                    st.markdown("</div>", unsafe_allow_html=True)
+                df.columns = df.columns.str.lower().str.strip()
+                if 'date' not in df.columns:
+                    st.error(f"The file **{uploaded_file.name}** does not contain a 'date' column.")
                     st.stop()
 
-                # Combine files, labels, and order
-                file_orders = list(zip(uploaded_files, process_labels, order_numbers))
+                df['date'] = pd.to_datetime(df['date'], errors='coerce')
+                df = df.dropna(subset=["date"])
+                df = remove_outliers_zscore(df)
+                dataframes.append(df)
 
-                # Sort files based on order
-                sorted_files = sorted(file_orders, key=lambda x: x[2])
-
-                # Unzip sorted files and labels
-                uploaded_files_sorted, process_labels_sorted, _ = zip(*sorted_files)
-                dataframes_sorted = [df for _, _, df in sorted(zip(uploaded_files, process_labels, dataframes), key=lambda x: order_numbers[uploaded_files.index(x[0])])]
-
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            # -------------------------------
-            # 4. Generate Heatmaps and Store Correlation Matrices
-            # -------------------------------
-            st.markdown("<div class='section'><div class='section-title'>Correlation Heatmaps</div>", unsafe_allow_html=True)
-            correlation_matrices = []
-            parameters_per_edge = []
-            for i in range(len(uploaded_files_sorted) - 1):
-                st.write(f"### Heatmap: **{process_labels_sorted[i]}** vs **{process_labels_sorted[i + 1]}**")
-
-                # Create separate progress bar and status
-                heatmap_progress = st.progress(0)
-                heatmap_status = st.empty()
-
-                # Merge data
-                df1 = dataframes_sorted[i][['date'] + common_params]
-                df2 = dataframes_sorted[i + 1][['date'] + common_params]
-                merged_df = pd.merge(
-                    df1, df2, on="date",
-                    suffixes=(f"_{process_labels_sorted[i]}", f"_{process_labels_sorted[i + 1]}")
+                # Prompt user for a label for this process
+                label = st.text_input(
+                    f"Enter a label for **{uploaded_file.name}**:",
+                    value=uploaded_file.name.split('.')[0],
+                    key=f"label_{idx}"
                 )
-                merged_df = merged_df.drop(columns=["date"], errors="ignore")
-                merged_df = merged_df.replace([np.inf, -np.inf], np.nan)
-                merged_df = merged_df.dropna()
-                numeric_columns = merged_df.select_dtypes(include=[np.number]).columns
-                merged_df = merged_df[numeric_columns]
+                process_labels.append(label)
+            except Exception as e:
+                st.error(f"Error processing file **{uploaded_file.name}**: {e}")
+                st.stop()
 
-                # Generate heatmap
-                filtered_corr_matrix = generate_heatmap(
-                    merged_df,
-                    f"Correlation Coefficient Heatmap: {process_labels_sorted[i]} vs {process_labels_sorted[i + 1]}",
-                    ("X-Axis", "Y-Axis"),
-                    progress_bar=heatmap_progress,
-                    status_text=heatmap_status,
+        if len(dataframes) < 2:
+            st.warning("Please upload at least two files to generate diagrams.")
+            st.stop()
+
+        # Identify common parameters
+        common_params = find_common_parameters(dataframes)
+        if not common_params:
+            st.error("No common parameters found across all uploaded files.")
+            st.stop()
+
+        st.success(f"Common parameters identified: {', '.join(common_params)}")
+
+        # -------------------------------
+        # 3. Reordering Uploaded Files via Sidebar
+        # -------------------------------
+        with st.sidebar:
+            st.markdown("### Reorder Uploaded Files")
+            st.write("Please assign an order to the uploaded files based on their sequence in real life (upstream to downstream).")
+
+            # Initialize list to store order
+            order_numbers = []
+            for idx, file in enumerate(uploaded_files):
+                order = st.number_input(
+                    f"Order for {file.name}", 
+                    min_value=1, 
+                    max_value=len(uploaded_files), 
+                    value=idx+1, 
+                    step=1, 
+                    key=f"order_sidebar_{idx}"
+                )
+                order_numbers.append(order)
+
+            # Validate unique order numbers
+            if len(set(order_numbers)) != len(order_numbers):
+                st.error("Each file must have a unique order number. Please adjust the order numbers accordingly.")
+                st.stop()
+
+            # Combine files, labels, and order
+            file_orders = list(zip(uploaded_files, process_labels, order_numbers))
+
+            # Sort files based on order
+            sorted_files = sorted(file_orders, key=lambda x: x[2])
+
+            # Unzip sorted files and labels
+            uploaded_files_sorted, process_labels_sorted, _ = zip(*sorted_files)
+            dataframes_sorted = [df for _, _, df in sorted(zip(uploaded_files, process_labels, dataframes), key=lambda x: order_numbers[uploaded_files.index(x[0])])]
+
+        # -------------------------------
+        # 4. Generate Heatmaps and Store Correlation Matrices
+        # -------------------------------
+        correlation_matrices = []
+        parameters_per_edge = []
+        for i in range(len(uploaded_files_sorted) - 1):
+            st.markdown(f"### Heatmap: **{process_labels_sorted[i]}** vs **{process_labels_sorted[i + 1]}**")
+
+            # Create separate progress bar and status
+            heatmap_progress = st.progress(0)
+            heatmap_status = st.empty()
+
+            # Merge data
+            df1 = dataframes_sorted[i][['date'] + common_params]
+            df2 = dataframes_sorted[i + 1][['date'] + common_params]
+            merged_df = pd.merge(
+                df1, df2, on="date",
+                suffixes=(f"_{process_labels_sorted[i]}", f"_{process_labels_sorted[i + 1]}")
+            )
+            merged_df = merged_df.drop(columns=["date"], errors="ignore")
+            merged_df = merged_df.replace([np.inf, -np.inf], np.nan)
+            merged_df = merged_df.dropna()
+            numeric_columns = merged_df.select_dtypes(include=[np.number]).columns
+            merged_df = merged_df[numeric_columns]
+
+            # Generate heatmap
+            filtered_corr_matrix = generate_heatmap(
+                merged_df,
+                f"Correlation Coefficient Heatmap: {process_labels_sorted[i]} vs {process_labels_sorted[i + 1]}",
+                ("X-Axis", "Y-Axis"),
+                progress_bar=heatmap_progress,
+                status_text=heatmap_status,
+                start_progress=0.0,
+                end_progress=1.0
+            )
+            correlation_matrices.append(filtered_corr_matrix)
+
+            # Identify parameters contributing to the correlation
+            shared_params = []
+            for param in common_params:
+                infl_param = f"{param}_{process_labels_sorted[i]}"
+                ode_param = f"{param}_{process_labels_sorted[i + 1]}"
+                if infl_param in filtered_corr_matrix.index and ode_param in filtered_corr_matrix.columns:
+                    if filtered_corr_matrix.loc[infl_param, ode_param] != 0:
+                        shared_params.append(param)
+            parameters_per_edge.append(shared_params)
+
+        # Identify globally shared parameters
+        globally_shared_parameters = set(parameters_per_edge[0])
+        for params in parameters_per_edge[1:]:
+            globally_shared_parameters &= set(params)
+
+        st.markdown(f"**Globally shared parameters across all node pairs:** {', '.join(globally_shared_parameters) if globally_shared_parameters else 'None'}")
+        if not globally_shared_parameters:
+            st.error("No globally shared parameters found.")
+            st.stop()
+
+        # -------------------------------
+        # 5. Generate Network Diagrams and Charts with Separate Progress Bars
+        # -------------------------------
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if st.button("Generate Globally Shared Network Diagram"):
+                # Create separate progress bar and status
+                global_net_progress = st.progress(0)
+                global_net_status = st.empty()
+
+                generate_network_diagram_streamlit(
+                    process_labels_sorted,
+                    correlation_matrices,
+                    globally_shared_parameters,
+                    globally_shared=True,
+                    progress_bar=global_net_progress,
+                    status_text=global_net_status,
                     start_progress=0.0,
                     end_progress=1.0
                 )
-                correlation_matrices.append(filtered_corr_matrix)
 
-                # Identify parameters contributing to the correlation
-                shared_params = []
-                for param in common_params:
-                    infl_param = f"{param}_{process_labels_sorted[i]}"
-                    ode_param = f"{param}_{process_labels_sorted[i + 1]}"
-                    if infl_param in filtered_corr_matrix.index and ode_param in filtered_corr_matrix.columns:
-                        if filtered_corr_matrix.loc[infl_param, ode_param] != 0:
-                            shared_params.append(param)
-                parameters_per_edge.append(shared_params)
+        with col2:
+            if st.button("Generate Locally Shared Network Diagram"):
+                # Create separate progress bar and status
+                local_net_progress = st.progress(0)
+                local_net_status = st.empty()
 
-            st.markdown("</div>", unsafe_allow_html=True)
+                generate_network_diagram_streamlit(
+                    process_labels_sorted,
+                    correlation_matrices,
+                    parameters_per_edge,
+                    globally_shared=False,
+                    progress_bar=local_net_progress,
+                    status_text=local_net_status,
+                    start_progress=0.0,
+                    end_progress=1.0
+                )
 
-            # Identify globally shared parameters
-            globally_shared_parameters = set(parameters_per_edge[0])
-            for params in parameters_per_edge[1:]:
-                globally_shared_parameters &= set(params)
+        with col3:
+            if st.button("Generate Bar Chart for Globally Shared Parameters"):
+                # Create separate progress bar and status
+                bar_chart_progress = st.progress(0)
+                bar_chart_status = st.empty()
 
-            st.markdown("<div class='section'><div class='section-title'>Globally Shared Parameters</div>", unsafe_allow_html=True)
-            st.markdown(f"**Globally shared parameters across all node pairs:** {', '.join(globally_shared_parameters) if globally_shared_parameters else 'None'}")
-            if not globally_shared_parameters:
-                st.error("No globally shared parameters found.")
-                st.markdown("</div>", unsafe_allow_html=True)
-                st.stop()
-            st.markdown("</div>", unsafe_allow_html=True)
+                plot_gspd_bar_chart(
+                    process_labels_sorted,
+                    globally_shared_parameters,
+                    correlation_matrices,
+                    progress_bar=bar_chart_progress,
+                    status_text=bar_chart_status,
+                    progress_increment=1.0  # Full progress for bar chart
+                )
 
-            # -------------------------------
-            # 5. Generate Network Diagrams and Charts with Separate Progress Bars
-            # -------------------------------
-            st.markdown("<div class='section'><div class='section-title'>Network Diagrams and Charts</div>", unsafe_allow_html=True)
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                if st.button("Generate Globally Shared Network Diagram"):
-                    # Check if already generated to prevent re-execution
-                    if 'global_net_generated' not in st.session_state:
-                        st.session_state.global_net_generated = False
+        with col4:
+            if st.button("Generate Line Graph for Globally Shared Parameters"):
+                # Create separate progress bar and status
+                line_graph_progress = st.progress(0)
+                line_graph_status = st.empty()
 
-                    if not st.session_state.global_net_generated:
-                        # Create separate progress bar and status
-                        global_net_progress = st.progress(0)
-                        global_net_status = st.empty()
+                plot_gspd_line_graph(
+                    process_labels_sorted,
+                    globally_shared_parameters,
+                    correlation_matrices,
+                    progress_bar=line_graph_progress,
+                    status_text=line_graph_status,
+                    progress_increment=1.0  # Full progress for line graph
+                )
 
-                        generate_network_diagram_streamlit(
-                            process_labels_sorted,
-                            correlation_matrices,
-                            globally_shared_parameters,
-                            globally_shared=True,
-                            progress_bar=global_net_progress,
-                            status_text=global_net_status,
-                            start_progress=0.0,
-                            end_progress=1.0
-                        )
-                        st.session_state.global_net_generated = True
-                    else:
-                        st.info("Globally Shared Network Diagram has already been generated.")
-    
-            with col2:
-                if st.button("Generate Locally Shared Network Diagram"):
-                    # Check if already generated to prevent re-execution
-                    if 'local_net_generated' not in st.session_state:
-                        st.session_state.local_net_generated = False
+        # -------------------------------
+        # 6. Targeted Network Diagram Section with Separate Progress Bar
+        # -------------------------------
+        st.markdown("---")
+        st.markdown("### Targeted Network Diagram:")
+        st.write("Generate a network diagram centered around a specific parameter from a selected process.")
 
-                    if not st.session_state.local_net_generated:
-                        # Create separate progress bar and status
-                        local_net_progress = st.progress(0)
-                        local_net_status = st.empty()
+        # Create separate progress bar and status
+        targeted_net_progress = st.progress(0)
+        targeted_net_status = st.empty()
 
-                        generate_network_diagram_streamlit(
-                            process_labels_sorted,
-                            correlation_matrices,
-                            parameters_per_edge,
-                            globally_shared=False,
-                            progress_bar=local_net_progress,
-                            status_text=local_net_status,
-                            start_progress=0.0,
-                            end_progress=1.0
-                        )
-                        st.session_state.local_net_generated = True
-                    else:
-                        st.info("Locally Shared Network Diagram has already been generated.")
+        generate_targeted_network_diagram_streamlit(
+            process_labels_sorted,
+            dataframes_sorted,
+            progress_bar=targeted_net_progress,
+            status_text=targeted_net_status,
+            progress_increment=1.0  # Full progress for targeted network diagram
+        )
 
-            with col3:
-                if st.button("Generate Bar Chart for Globally Shared Parameters"):
-                    # Check if already generated to prevent re-execution
-                    if 'bar_chart_generated' not in st.session_state:
-                        st.session_state.bar_chart_generated = False
+# -------------------------------
+# Run the Streamlit App
+# -------------------------------
 
-                    if not st.session_state.bar_chart_generated:
-                        # Create separate progress bar and status
-                        bar_chart_progress = st.progress(0)
-                        bar_chart_status = st.empty()
-
-                        plot_gspd_bar_chart(
-                            process_labels_sorted,
-                            globally_shared_parameters,
-                            correlation_matrices,
-                            progress_bar=bar_chart_progress,
-                            status_text=bar_chart_status,
-                            progress_increment=1.0  # Full progress for bar chart
-                        )
-                        st.session_state.bar_chart_generated = True
-                    else:
-                        st.info("Bar Chart for Globally Shared Parameters has already been generated.")
-
-            with col4:
-                if st.button("Generate Line Graph for Globally Shared Parameters"):
-                    # Check if already generated to prevent re-execution
-                    if 'line_graph_generated' not in st.session_state:
-                        st.session_state.line_graph_generated = False
-
-                    if not st.session_state.line_graph_generated:
-                        # Create separate progress bar and status
-                        line_graph_progress = st.progress(0)
-                        line_graph_status = st.empty()
-
-                        plot_gspd_line_graph(
-                            process_labels_sorted,
-                            globally_shared_parameters,
-                            correlation_matrices,
-                            progress_bar=line_graph_progress,
-                            status_text=line_graph_status,
-                            progress_increment=1.0  # Full progress for line graph
-                        )
-                        st.session_state.line_graph_generated = True
-                    else:
-                        st.info("Line Graph for Globally Shared Parameters has already been generated.")
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            # -------------------------------
-            # 6. Targeted Network Diagram Section with Separate Progress Bar
-            # -------------------------------
-            st.markdown("<div class='section'><div class='section-title'>Targeted Network Diagram</div>", unsafe_allow_html=True)
-            st.write("Generate a network diagram centered around a specific parameter from a selected process.")
-
-            # Create separate progress bar and status
-            targeted_net_progress = st.progress(0)
-            targeted_net_status = st.empty()
-
-            generate_targeted_network_diagram_streamlit(
-                process_labels_sorted,
-                dataframes_sorted,
-                progress_bar=targeted_net_progress,
-                status_text=targeted_net_status,
-                progress_increment=1.0  # Full progress for targeted network diagram
-            )
-            st.markdown("</div>", unsafe_allow_html=True)
-
-    # -------------------------------
-    # Run the Streamlit App
-    # -------------------------------
-
-    if __name__ == "__main__":
-        main()
+if __name__ == "__main__":
+    main()
