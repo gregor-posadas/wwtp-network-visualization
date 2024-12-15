@@ -877,10 +877,13 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
 # -------------------------------
 
 def main():
+    # Set page config as the very first Streamlit command
+    st.set_page_config(page_title="WWTP Unit Processes Network Visualization", layout="wide")
+    
     # Add custom CSS for outlines
     add_css()
 
-    st.set_page_config(page_title="WWTP Unit Processes Network Visualization", layout="wide")
+    # Add the main title
     st.markdown("<h1 style='text-align: center; color: #0e76a8;'>WWTP Unit Processes Network Visualization</h1>", unsafe_allow_html=True)
     
     # -------------------------------
