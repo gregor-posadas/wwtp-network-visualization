@@ -21,38 +21,54 @@ import matplotlib
 # Prevent matplotlib from trying to use any Xwindows backend.
 matplotlib.use('Agg')
 
+
 # -------------------------------
 # Data Processing Functions
 # -------------------------------
 
-def bootstrap_correlations(df, n_iterations=500, method='pearson', progress_bar=None, status_text=None, start_progress=0.0, end_progress=1.0):
+@st.cache_data
+def bootstrap_correlations(df, n_iterations=500, method='pearson'):
+    """
+    Perform bootstrapping to calculate median correlation matrices.
+    """
     correlations = []
-    for i in range(n_iterations):
+    for _ in range(n_iterations):
         df_resampled = resample(df)
         corr_matrix = df_resampled.corr(method=method)
         correlations.append(corr_matrix)
-        if progress_bar and status_text:
-            # Calculate incremental progress
-            progress = start_progress + (i + 1) / n_iterations * (end_progress - start_progress)
-            progress_bar.progress(int(progress * 100))
-            status_text.text(f"Bootstrapping {method.capitalize()} Correlations... ({i+1}/{n_iterations})")
     median_corr = pd.concat(correlations).groupby(level=0).median()
     return median_corr
 
+@st.cache_data
 def calculate_p_values(df, method='pearson'):
+    """
+    Calculate p-values for each pairwise correlation.
+    """
     p_values = pd.DataFrame(np.ones((df.shape[1], df.shape[1])), columns=df.columns, index=df.columns)
     for col1, col2 in itertools.combinations(df.columns, 2):
         try:
-            _, p_val = stats.pearsonr(df[col1], df[col2])
+            if method == 'pearson':
+                _, p_val = stats.pearsonr(df[col1], df[col2])
+            elif method == 'spearman':
+                _, p_val = stats.spearmanr(df[col1], df[col2])
+            elif method == 'kendall':
+                _, p_val = stats.kendalltau(df[col1], df[col2])
+            else:
+                p_val = 1.0
             p_values.at[col1, col2] = p_val
             p_values.at[col2, col1] = p_val
         except Exception:
-            p_values.at[col1, col2] = 1
-            p_values.at[col2, col1] = 1
+            p_values.at[col1, col2] = 1.0
+            p_values.at[col2, col1] = 1.0
     return p_values
 
+@st.cache_data
 def correct_p_values(p_values):
-    _, corrected, _, _ = multipletests(p_values.values.flatten(), alpha=0.05, method='fdr_bh')
+    """
+    Apply multiple testing correction to p-values.
+    """
+    flat_p = p_values.values.flatten()
+    _, corrected, _, _ = multipletests(flat_p, alpha=0.05, method='fdr_bh')
     corrected_p = pd.DataFrame(corrected.reshape(p_values.shape), index=p_values.index, columns=p_values.columns)
     return corrected_p
 
@@ -79,7 +95,6 @@ def remove_outliers_zscore(df, threshold=3):
     """
     Remove outliers from a DataFrame using the Z-score method.
     """
-    st.write("Applying Z-Score Method to filter outliers...")
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     z_scores = np.abs(stats.zscore(df[numeric_cols], nan_policy="omit"))
     mask = (z_scores < threshold).all(axis=1)
@@ -87,42 +102,24 @@ def remove_outliers_zscore(df, threshold=3):
     st.write(f"Outliers removed: {len(df) - len(filtered_df)}")
     return filtered_df
 
-def validate_correlation_matrix(df, n_iterations=500, alpha=0.05, progress_bar=None, status_text=None, start_progress=0.0, end_progress=1.0):
+def validate_correlation_matrix(df, method='pearson', alpha=0.05):
+    """
+    Validate correlations using bootstrapping and p-value correction.
+    Returns a filtered correlation matrix with only significant values.
+    """
     st.write(f"DataFrame shape: {df.shape}")
     st.write("Bootstrapping correlation matrices...")
 
-    # Ensure all columns are numeric
-    df = df.apply(pd.to_numeric, errors='coerce')
-    df = df.dropna(axis=1, how='all')  # Drop columns that are entirely non-numeric or NaN
-
-    # Bootstrap Pearson correlations
-    pearson_corr = bootstrap_correlations(
-        df, n_iterations=n_iterations, method='pearson',
-        progress_bar=progress_bar, status_text=status_text,
-        start_progress=start_progress, end_progress=start_progress + (end_progress - start_progress) / 3
-    )
-
-    # Bootstrap Spearman correlations
-    spearman_corr = bootstrap_correlations(
-        df, n_iterations=n_iterations, method='spearman',
-        progress_bar=progress_bar, status_text=status_text,
-        start_progress=start_progress + (end_progress - start_progress) / 3,
-        end_progress=start_progress + 2 * (end_progress - start_progress) / 3
-    )
-
-    # Bootstrap Kendall correlations
-    kendall_corr = bootstrap_correlations(
-        df, n_iterations=n_iterations, method='kendall',
-        progress_bar=progress_bar, status_text=status_text,
-        start_progress=start_progress + 2 * (end_progress - start_progress) / 3,
-        end_progress=end_progress
-    )
+    # Bootstrap correlations
+    pearson_corr = bootstrap_correlations(df, method='pearson')
+    spearman_corr = bootstrap_correlations(df, method='spearman')
+    kendall_corr = bootstrap_correlations(df, method='kendall')
 
     # Average the correlation matrices
     avg_corr_matrix = (pearson_corr + spearman_corr + kendall_corr) / 3
 
     st.write("Calculating and correcting p-values...")
-    p_values = calculate_p_values(df, method='pearson')
+    p_values = calculate_p_values(df, method='pearson')  # Using Pearson for p-values
     corrected_p_values = correct_p_values(p_values)
 
     sig_mask = (corrected_p_values < alpha).astype(int)
@@ -131,28 +128,26 @@ def validate_correlation_matrix(df, n_iterations=500, alpha=0.05, progress_bar=N
     st.write("Correlation matrix validated and filtered based on significance.")
     return filtered_corr_matrix
 
+
 # -------------------------------
 # Visualization Functions
 # -------------------------------
 
-def generate_heatmap(df, title, labels, progress_bar, status_text, start_progress, end_progress):
+@st.cache_data
+def generate_heatmap_cached(merged_df, title):
     """
-    Generate a heatmap and return the filtered correlation matrix.
-    Update progress incrementally during processing.
+    Cached function to generate heatmap correlation matrices.
     """
     filtered_corr_matrix = validate_correlation_matrix(
-        df, 
-        progress_bar=progress_bar, 
-        status_text=status_text, 
-        start_progress=start_progress, 
-        end_progress=end_progress
+        merged_df,
+        method='pearson',
+        alpha=0.05
     )
     parameter_order = sorted(filtered_corr_matrix.index)
     filtered_corr_matrix = filtered_corr_matrix.loc[parameter_order, parameter_order]
 
     np.fill_diagonal(filtered_corr_matrix.values, 1)
 
-    st.subheader(title)
     fig = px.imshow(
         filtered_corr_matrix,
         text_auto=".2f",
@@ -179,14 +174,20 @@ def generate_heatmap(df, title, labels, progress_bar, status_text, start_progres
         margin=dict(l=100, r=100, t=100, b=100),
     )
 
+    return fig, filtered_corr_matrix
+
+def generate_heatmap(merged_df, title, progress_bar, status_text):
+    """
+    Generate and display a heatmap with progress updates.
+    """
+    with st.spinner("Generating heatmap..."):
+        fig, filtered_corr_matrix = generate_heatmap_cached(merged_df, title)
     st.plotly_chart(fig)
     return filtered_corr_matrix
 
-def generate_network_diagram_streamlit(labels, correlation_matrices, parameters, globally_shared=True, progress_bar=None, status_text=None, start_progress=0.0, end_progress=1.0):
+def generate_network_diagram_streamlit(labels, correlation_matrices, parameters, globally_shared=True, progress_bar=None, status_text=None):
     """
     Generate a parameter-based network diagram.
-    If globally_shared is True, use globally shared parameters.
-    Otherwise, use locally shared parameters for each edge.
     """
     G = nx.MultiGraph()
     diagram_type = "Globally Shared" if globally_shared else "Locally Shared"
@@ -198,7 +199,12 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
 
     total_connections = len(labels) -1
     for i in range(len(labels) - 1):
-        st.write(f"Processing connection: {labels[i]} → {labels[i + 1]}")
+        if progress_bar and status_text:
+            progress = (i + 1) / total_connections
+            progress_bar.progress(int(progress * 100))
+            status_text.text(f"Processing connection: {labels[i]} → {labels[i + 1]}")
+
+        st.write(f"Processing connection: **{labels[i]} → {labels[i + 1]}**")
 
         # Retrieve the filtered correlation matrix for this pair
         filtered_corr_matrix = correlation_matrices[i]
@@ -250,12 +256,6 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
 
         if edge_summary['parameters']:
             edge_summaries.append(edge_summary)
-
-        # Update progress
-        if progress_bar and status_text:
-            progress = start_progress + (i +1)/total_connections * (end_progress - start_progress)
-            progress_bar.progress(int(progress * 100))
-            status_text.text(f"Processing connection: {node1} → {node2}")
 
     if G.number_of_nodes() == 0:
         st.warning("No nodes to display in the network diagram.")
@@ -320,8 +320,7 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
 
         # Draw the edge
         nx.draw_networkx_edges(
-            G,
-            pos,
+            G, pos,
             edgelist=[(u, v, key)],
             connectionstyle=f"arc3,rad={curvature}",
             edge_color=[edge_color],
@@ -656,29 +655,17 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
         pearson_corr = bootstrap_correlations(
             combined_df, 
             n_iterations=n_iterations, 
-            method='pearson', 
-            progress_bar=progress_bar, 
-            status_text=status_text, 
-            start_progress=0.0, 
-            end_progress=0.3 * progress_increment
+            method='pearson'
         )
         spearman_corr = bootstrap_correlations(
             combined_df, 
             n_iterations=n_iterations, 
-            method='spearman', 
-            progress_bar=progress_bar, 
-            status_text=status_text, 
-            start_progress=0.3 * progress_increment, 
-            end_progress=0.6 * progress_increment
+            method='spearman'
         )
         kendall_corr = bootstrap_correlations(
             combined_df, 
             n_iterations=n_iterations, 
-            method='kendall', 
-            progress_bar=progress_bar, 
-            status_text=status_text, 
-            start_progress=0.6 * progress_increment, 
-            end_progress=0.9 * progress_increment
+            method='kendall'
         )
 
         # Average the correlation matrices
@@ -760,16 +747,6 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
         # Draw the network diagram
         pos = nx.spring_layout(G, seed=42)
 
-        # Adjust node positions to separate internal and external correlations
-        internal_nodes = [node for node in G.nodes if G.nodes[node]['process'] == selected_process_label and node != target_param_full]
-        external_nodes = [node for node in G.nodes if G.nodes[node]['process'] != selected_process_label]
-        target_pos = pos[target_param_full]
-        # Adjust positions
-        for node in internal_nodes:
-            pos[node][0] -= 0.5  # Move to the left
-        for node in external_nodes:
-            pos[node][0] += 0.5  # Move to the right
-
         fig, ax = plt.subplots(figsize=(14, 10))
 
         # Node colors based on process
@@ -848,6 +825,7 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
             status_text.text("Targeted Network Diagram generated.")
         except Exception as e:
             st.error(f"Error updating progress bar: {e}")
+
 
 # -------------------------------
 # Main Streamlit App
@@ -968,59 +946,81 @@ def main():
         # -------------------------------
         # 4. Generate Heatmaps and Store Correlation Matrices
         # -------------------------------
-        correlation_matrices = []
-        parameters_per_edge = []
-        for i in range(len(uploaded_files_sorted) - 1):
-            st.markdown(f"### Heatmap: **{process_labels_sorted[i]}** vs **{process_labels_sorted[i + 1]}**")
+        if 'heatmaps_generated' not in st.session_state:
+            st.session_state['heatmaps'] = []
+            st.session_state['correlation_matrices'] = []
+            st.session_state['parameters_per_edge'] = []
+            st.session_state['globally_shared_parameters'] = set()
+            st.session_state['heatmaps_generated'] = False
 
-            # Create separate progress bar and status
-            heatmap_progress = st.progress(0)
-            heatmap_status = st.empty()
+        if not st.session_state['heatmaps_generated']:
+            correlation_matrices = []
+            parameters_per_edge = []
+            for i in range(len(uploaded_files_sorted) - 1):
+                st.markdown(f"### Heatmap: **{process_labels_sorted[i]}** vs **{process_labels_sorted[i + 1]}**")
 
-            # Merge data
-            df1 = dataframes_sorted[i][['date'] + common_params]
-            df2 = dataframes_sorted[i + 1][['date'] + common_params]
-            merged_df = pd.merge(
-                df1, df2, on="date",
-                suffixes=(f"_{process_labels_sorted[i]}", f"_{process_labels_sorted[i + 1]}")
-            )
-            merged_df = merged_df.drop(columns=["date"], errors="ignore")
-            merged_df = merged_df.replace([np.inf, -np.inf], np.nan)
-            merged_df = merged_df.dropna()
-            numeric_columns = merged_df.select_dtypes(include=[np.number]).columns
-            merged_df = merged_df[numeric_columns]
+                # Create separate progress bar and status
+                heatmap_progress = st.progress(0)
+                heatmap_status = st.empty()
 
-            # Generate heatmap
-            filtered_corr_matrix = generate_heatmap(
-                merged_df,
-                f"Correlation Coefficient Heatmap: {process_labels_sorted[i]} vs {process_labels_sorted[i + 1]}",
-                ("X-Axis", "Y-Axis"),
-                progress_bar=heatmap_progress,
-                status_text=heatmap_status,
-                start_progress=0.0,
-                end_progress=1.0
-            )
-            correlation_matrices.append(filtered_corr_matrix)
+                # Merge data
+                df1 = dataframes_sorted[i][['date'] + common_params]
+                df2 = dataframes_sorted[i + 1][['date'] + common_params]
+                merged_df = pd.merge(
+                    df1, df2, on="date",
+                    suffixes=(f"_{process_labels_sorted[i]}", f"_{process_labels_sorted[i + 1]}")
+                )
+                merged_df = merged_df.drop(columns=["date"], errors="ignore")
+                merged_df = merged_df.replace([np.inf, -np.inf], np.nan)
+                merged_df = merged_df.dropna()
+                numeric_columns = merged_df.select_dtypes(include=[np.number]).columns
+                merged_df = merged_df[numeric_columns]
 
-            # Identify parameters contributing to the correlation
-            shared_params = []
-            for param in common_params:
-                infl_param = f"{param}_{process_labels_sorted[i]}"
-                ode_param = f"{param}_{process_labels_sorted[i + 1]}"
-                if infl_param in filtered_corr_matrix.index and ode_param in filtered_corr_matrix.columns:
-                    if filtered_corr_matrix.loc[infl_param, ode_param] != 0:
-                        shared_params.append(param)
-            parameters_per_edge.append(shared_params)
+                # Generate heatmap using cached function
+                title = f"Correlation Coefficient Heatmap: {process_labels_sorted[i]} vs {process_labels_sorted[i + 1]}"
+                fig, filtered_corr_matrix = generate_heatmap_cached(merged_df, title)
 
-        # Identify globally shared parameters
-        globally_shared_parameters = set(parameters_per_edge[0])
-        for params in parameters_per_edge[1:]:
-            globally_shared_parameters &= set(params)
+                # Display the heatmap
+                st.plotly_chart(fig)
 
-        st.markdown(f"**Globally shared parameters across all node pairs:** {', '.join(globally_shared_parameters) if globally_shared_parameters else 'None'}")
-        if not globally_shared_parameters:
-            st.error("No globally shared parameters found.")
-            st.stop()
+                # Append to session state
+                st.session_state['correlation_matrices'].append(filtered_corr_matrix)
+
+                # Identify parameters contributing to the correlation
+                shared_params = []
+                for param in common_params:
+                    infl_param = f"{param}_{process_labels_sorted[i]}"
+                    ode_param = f"{param}_{process_labels_sorted[i + 1]}"
+                    if infl_param in filtered_corr_matrix.index and ode_param in filtered_corr_matrix.columns:
+                        if filtered_corr_matrix.loc[infl_param, ode_param] != 0:
+                            shared_params.append(param)
+                st.session_state['parameters_per_edge'].append(shared_params)
+
+                # Update progress bar
+                heatmap_progress.progress(100)
+                heatmap_status.text("Heatmap generated.")
+
+            # Identify globally shared parameters
+            globally_shared_parameters = set(st.session_state['parameters_per_edge'][0])
+            for params in st.session_state['parameters_per_edge'][1:]:
+                globally_shared_parameters &= set(params)
+            st.session_state['globally_shared_parameters'] = globally_shared_parameters
+            st.session_state['heatmaps_generated'] = True
+
+            st.markdown(f"**Globally shared parameters across all node pairs:** {', '.join(globally_shared_parameters) if globally_shared_parameters else 'None'}")
+            if not globally_shared_parameters:
+                st.error("No globally shared parameters found.")
+                st.stop()
+        else:
+            # Retrieve from session state
+            correlation_matrices = st.session_state['correlation_matrices']
+            parameters_per_edge = st.session_state['parameters_per_edge']
+            globally_shared_parameters = st.session_state['globally_shared_parameters']
+
+            st.markdown(f"**Globally shared parameters across all node pairs:** {', '.join(globally_shared_parameters) if globally_shared_parameters else 'None'}")
+            if not globally_shared_parameters:
+                st.error("No globally shared parameters found.")
+                st.stop()
 
         # -------------------------------
         # 5. Generate Network Diagrams and Charts with Separate Progress Bars
@@ -1029,66 +1029,90 @@ def main():
         with col1:
             if st.button("Generate Globally Shared Network Diagram"):
                 # Create separate progress bar and status
-                global_net_progress = st.progress(0)
-                global_net_status = st.empty()
+                if 'global_net_generated' not in st.session_state:
+                    st.session_state['global_net_generated'] = False
 
-                generate_network_diagram_streamlit(
-                    process_labels_sorted,
-                    correlation_matrices,
-                    globally_shared_parameters,
-                    globally_shared=True,
-                    progress_bar=global_net_progress,
-                    status_text=global_net_status,
-                    start_progress=0.0,
-                    end_progress=1.0
-                )
+                if not st.session_state['global_net_generated']:
+                    global_net_progress = st.progress(0)
+                    global_net_status = st.empty()
+
+                    generate_network_diagram_streamlit(
+                        process_labels_sorted,
+                        correlation_matrices,
+                        globally_shared_parameters,
+                        globally_shared=True,
+                        progress_bar=global_net_progress,
+                        status_text=global_net_status
+                    )
+                    st.session_state['global_net_generated'] = True
+                else:
+                    st.info("Globally Shared Network Diagram has already been generated.")
 
         with col2:
             if st.button("Generate Locally Shared Network Diagram"):
                 # Create separate progress bar and status
-                local_net_progress = st.progress(0)
-                local_net_status = st.empty()
+                if 'local_net_generated' not in st.session_state:
+                    st.session_state['local_net_generated'] = False
 
-                generate_network_diagram_streamlit(
-                    process_labels_sorted,
-                    correlation_matrices,
-                    parameters_per_edge,
-                    globally_shared=False,
-                    progress_bar=local_net_progress,
-                    status_text=local_net_status,
-                    start_progress=0.0,
-                    end_progress=1.0
-                )
+                if not st.session_state['local_net_generated']:
+                    local_net_progress = st.progress(0)
+                    local_net_status = st.empty()
+
+                    generate_network_diagram_streamlit(
+                        process_labels_sorted,
+                        correlation_matrices,
+                        parameters_per_edge,
+                        globally_shared=False,
+                        progress_bar=local_net_progress,
+                        status_text=local_net_status
+                    )
+                    st.session_state['local_net_generated'] = True
+                else:
+                    st.info("Locally Shared Network Diagram has already been generated.")
 
         with col3:
             if st.button("Generate Bar Chart for Globally Shared Parameters"):
                 # Create separate progress bar and status
-                bar_chart_progress = st.progress(0)
-                bar_chart_status = st.empty()
+                if 'bar_chart_generated' not in st.session_state:
+                    st.session_state['bar_chart_generated'] = False
 
-                plot_gspd_bar_chart(
-                    process_labels_sorted,
-                    globally_shared_parameters,
-                    correlation_matrices,
-                    progress_bar=bar_chart_progress,
-                    status_text=bar_chart_status,
-                    progress_increment=1.0  # Full progress for bar chart
-                )
+                if not st.session_state['bar_chart_generated']:
+                    bar_chart_progress = st.progress(0)
+                    bar_chart_status = st.empty()
+
+                    plot_gspd_bar_chart(
+                        process_labels_sorted,
+                        globally_shared_parameters,
+                        correlation_matrices,
+                        progress_bar=bar_chart_progress,
+                        status_text=bar_chart_status,
+                        progress_increment=1.0  # Full progress for bar chart
+                    )
+                    st.session_state['bar_chart_generated'] = True
+                else:
+                    st.info("Bar Chart for Globally Shared Parameters has already been generated.")
 
         with col4:
             if st.button("Generate Line Graph for Globally Shared Parameters"):
                 # Create separate progress bar and status
-                line_graph_progress = st.progress(0)
-                line_graph_status = st.empty()
+                if 'line_graph_generated' not in st.session_state:
+                    st.session_state['line_graph_generated'] = False
 
-                plot_gspd_line_graph(
-                    process_labels_sorted,
-                    globally_shared_parameters,
-                    correlation_matrices,
-                    progress_bar=line_graph_progress,
-                    status_text=line_graph_status,
-                    progress_increment=1.0  # Full progress for line graph
-                )
+                if not st.session_state['line_graph_generated']:
+                    line_graph_progress = st.progress(0)
+                    line_graph_status = st.empty()
+
+                    plot_gspd_line_graph(
+                        process_labels_sorted,
+                        globally_shared_parameters,
+                        correlation_matrices,
+                        progress_bar=line_graph_progress,
+                        status_text=line_graph_status,
+                        progress_increment=1.0  # Full progress for line graph
+                    )
+                    st.session_state['line_graph_generated'] = True
+                else:
+                    st.info("Line Graph for Globally Shared Parameters has already been generated.")
 
         # -------------------------------
         # 6. Targeted Network Diagram Section with Separate Progress Bar
@@ -1097,17 +1121,24 @@ def main():
         st.markdown("### Targeted Network Diagram:")
         st.write("Generate a network diagram centered around a specific parameter from a selected process.")
 
-        # Create separate progress bar and status
-        targeted_net_progress = st.progress(0)
-        targeted_net_status = st.empty()
+        if 'targeted_net_generated' not in st.session_state:
+            st.session_state['targeted_net_generated'] = False
 
-        generate_targeted_network_diagram_streamlit(
-            process_labels_sorted,
-            dataframes_sorted,
-            progress_bar=targeted_net_progress,
-            status_text=targeted_net_status,
-            progress_increment=1.0  # Full progress for targeted network diagram
-        )
+        if st.button("Generate Targeted Network Diagram"):
+            if not st.session_state['targeted_net_generated']:
+                targeted_net_progress = st.progress(0)
+                targeted_net_status = st.empty()
+
+                generate_targeted_network_diagram_streamlit(
+                    process_labels_sorted,
+                    dataframes_sorted,
+                    progress_bar=targeted_net_progress,
+                    status_text=targeted_net_status
+                )
+                st.session_state['targeted_net_generated'] = True
+            else:
+                st.info("Targeted Network Diagram has already been generated.")
+
 
 # -------------------------------
 # Run the Streamlit App
