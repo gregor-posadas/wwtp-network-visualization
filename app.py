@@ -45,7 +45,14 @@ def calculate_p_values(df, method='pearson'):
     p_values = pd.DataFrame(np.ones((df.shape[1], df.shape[1])), columns=df.columns, index=df.columns)
     for col1, col2 in itertools.combinations(df.columns, 2):
         try:
-            _, p_val = stats.pearsonr(df[col1], df[col2])
+            if method == 'pearson':
+                _, p_val = stats.pearsonr(df[col1], df[col2])
+            elif method == 'spearman':
+                _, p_val = stats.spearmanr(df[col1], df[col2])
+            elif method == 'kendall':
+                _, p_val = stats.kendalltau(df[col1], df[col2])
+            else:
+                p_val = 1.0
             p_values.at[col1, col2] = p_val
             p_values.at[col2, col1] = p_val
         except Exception:
@@ -150,12 +157,12 @@ def generate_heatmap(df, title, labels, container, mode):
         st.subheader(title)
         
         # Initialize individual progress bar and status text
-        heatmap_progress = st.progress(0)
-        heatmap_status = st.empty()
+        heatmap_progress = st.empty()
+        heatmap_bar = st.progress(0)
         
         # Validate correlation matrix with progress updates
         filtered_corr_matrix = validate_correlation_matrix(
-            df, progress_bar=heatmap_progress, status_text=heatmap_status, 
+            df, progress_bar=heatmap_bar, status_text=heatmap_progress, 
             start_progress=0.0, end_progress=0.4
         )
         
@@ -194,8 +201,8 @@ def generate_heatmap(df, title, labels, container, mode):
         st.plotly_chart(fig)
         
         # Complete progress
-        heatmap_progress.progress(100)
-        heatmap_status.text("Heatmap generation complete.")
+        heatmap_bar.progress(100)
+        heatmap_progress.text("Heatmap generation complete.")
         
         return filtered_corr_matrix
 
@@ -211,8 +218,8 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
         st.subheader(f"{diagram_type} Network Diagram")
     
         # Initialize individual progress bar and status text
-        network_progress = st.progress(0)
-        network_status = st.empty()
+        network_progress = st.empty()
+        network_bar = st.progress(0)
     
         # Initialize graph
         G = nx.MultiGraph()
@@ -276,10 +283,10 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
                 edge_summaries.append(edge_summary)
     
             # Update progress
-            if network_progress and network_status:
+            if network_bar and network_progress:
                 progress = (i +1)/total_connections * 100
-                network_progress.progress(int(progress))
-                network_status.text(f"Processing connection: {node1} → {node2}")
+                network_bar.progress(int(progress))
+                network_progress.text(f"Processing connection: {node1} → {node2}")
     
         if G.number_of_nodes() == 0:
             st.warning("No nodes to display in the network diagram.")
@@ -414,8 +421,8 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
         st.pyplot(fig)
         
         # Complete progress
-        network_progress.progress(100)
-        network_status.text(f"{diagram_type} Network Diagram generation complete.")
+        network_bar.progress(100)
+        network_progress.text(f"{diagram_type} Network Diagram generation complete.")
 
 def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_matrices, container, mode, progress_increment):
     """
@@ -426,8 +433,8 @@ def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_
         st.write("### Bar Chart: Globally Shared Parameter Correlations")
         
         # Initialize individual progress bar and status text
-        bar_chart_progress = st.progress(0)
-        bar_chart_status = st.empty()
+        bar_chart_progress = st.empty()
+        bar_chart_bar = st.progress(0)
         
         # Initialize data structure for correlations
         data = {param: [] for param in globally_shared_parameters}
@@ -454,8 +461,8 @@ def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_
                     data[param].append(0)  # Fill missing correlations with 0
                 step +=1
                 progress = (step / total_steps) * progress_increment * 100
-                bar_chart_progress.progress(int(progress))
-                bar_chart_status.text(f"Generating Bar Chart... ({step}/{total_steps})")
+                bar_chart_bar.progress(int(progress))
+                bar_chart_progress.text(f"Generating Bar Chart... ({step}/{total_steps})")
     
         # Compute y-limits for consistent axes
         all_correlations = [corr for correlations in data.values() for corr in correlations]
@@ -518,8 +525,8 @@ def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_
         st.pyplot(fig)
         
         # Complete progress
-        bar_chart_progress.progress(100)
-        bar_chart_status.text("Bar Chart generation complete.")
+        bar_chart_bar.progress(100)
+        bar_chart_progress.text("Bar Chart generation complete.")
 
 def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation_matrices, container, mode, progress_increment):
     """
@@ -530,8 +537,8 @@ def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation
         st.write("### Line Graph: Globally Shared Parameter Correlations")
         
         # Initialize individual progress bar and status text
-        line_graph_progress = st.progress(0)
-        line_graph_status = st.empty()
+        line_graph_progress = st.empty()
+        line_graph_bar = st.progress(0)
         
         # Initialize data structure for correlations
         data = {param: [] for param in globally_shared_parameters}
@@ -558,8 +565,8 @@ def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation
                     data[param].append(0)  # Fill missing correlations with 0
                 step +=1
                 progress = (step / total_steps) * progress_increment * 100
-                line_graph_progress.progress(int(progress))
-                line_graph_status.text(f"Generating Line Graph... ({step}/{total_steps})")
+                line_graph_bar.progress(int(progress))
+                line_graph_progress.text(f"Generating Line Graph... ({step}/{total_steps})")
     
         # Compute y-limits for consistent axes
         all_correlations = [corr for correlations in data.values() for corr in correlations]
@@ -614,8 +621,8 @@ def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation
         st.pyplot(fig)
         
         # Complete progress
-        line_graph_progress.progress(100)
-        line_graph_status.text("Line Graph generation complete.")
+        line_graph_bar.progress(100)
+        line_graph_progress.text("Line Graph generation complete.")
 
 def generate_targeted_network_diagram_streamlit(process_labels, dataframes, container, mode, progress_increment, n_iterations=500, alpha=0.05):
     """
@@ -626,8 +633,8 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, cont
         st.write("### Targeted Network Diagram")
     
         # Initialize individual progress bar and status text
-        targeted_progress = st.progress(0)
-        targeted_status = st.empty()
+        targeted_progress = st.empty()
+        targeted_bar = st.progress(0)
     
         # User selects a process
         selected_process_label = st.selectbox(
@@ -660,8 +667,8 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, cont
             st.write(f"Generating network diagram for **{selected_parameter}** in **{selected_process_label}** with alpha={alpha}...")
     
             # Update status
-            targeted_status.text("Preparing data for targeted network diagram...")
-            targeted_progress.progress(int((0.05 * progress_increment) * 100))  # Data preparation as 5% of progress_increment
+            targeted_progress.text("Preparing data for targeted network diagram...")
+            targeted_bar.progress(int((0.05 * progress_increment) * 100))  # Data preparation as 5% of progress_increment
     
             # Prepare data for correlations
             combined_df = selected_dataframe[['date', selected_parameter]].copy()
@@ -690,23 +697,23 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, cont
     
             # Apply Z-score outlier removal
             combined_df = remove_outliers_zscore(combined_df, threshold=3)
-            targeted_progress.progress(int((0.10 * progress_increment) * 100))  # Data cleaning as additional 5%
+            targeted_bar.progress(int((0.10 * progress_increment) * 100))  # Data cleaning as additional 5%
     
             # Bootstrapping Correlations
-            targeted_status.text("Bootstrapping correlations...")
+            targeted_progress.text("Bootstrapping correlations...")
             pearson_corr = bootstrap_correlations(
                 combined_df, n_iterations=n_iterations, method='pearson',
-                progress_bar=targeted_progress, status_text=targeted_status,
+                progress_bar=targeted_bar, status_text=targeted_progress,
                 start_progress=0.10, end_progress=0.40 * progress_increment
             )
             spearman_corr = bootstrap_correlations(
                 combined_df, n_iterations=n_iterations, method='spearman',
-                progress_bar=targeted_progress, status_text=targeted_status,
+                progress_bar=targeted_bar, status_text=targeted_progress,
                 start_progress=0.40 * progress_increment, end_progress=0.70 * progress_increment
             )
             kendall_corr = bootstrap_correlations(
                 combined_df, n_iterations=n_iterations, method='kendall',
-                progress_bar=targeted_progress, status_text=targeted_status,
+                progress_bar=targeted_bar, status_text=targeted_progress,
                 start_progress=0.70 * progress_increment, end_progress=0.95 * progress_increment
             )
     
@@ -716,13 +723,13 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, cont
             target_param_full = f"{selected_parameter}_{selected_process_label}"
             if target_param_full not in avg_corr_matrix.columns:
                 st.error(f"The selected parameter '{selected_parameter}' is not available in the data.")
-                targeted_progress.progress(int((0.95 * progress_increment) * 100))
-                targeted_status.text("Targeted Network Diagram generation failed.")
+                targeted_bar.progress(int((0.95 * progress_increment) * 100))
+                targeted_progress.text("Targeted Network Diagram generation failed.")
                 return
             target_correlations = avg_corr_matrix[target_param_full].drop(target_param_full)
     
             # Calculate p-values
-            targeted_status.text("Calculating and correcting p-values...")
+            targeted_progress.text("Calculating and correcting p-values...")
             p_values = pd.Series(dtype=float)
             for col in target_correlations.index:
                 if np.all(combined_df[target_param_full] == combined_df[col]):
@@ -746,8 +753,8 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, cont
             # Check if any significant correlations are found
             if significant_correlations.empty:
                 st.warning("No significant correlations found with the selected alpha level.")
-                targeted_progress.progress(int((0.95 * progress_increment) * 100))
-                targeted_status.text("No significant correlations found.")
+                targeted_bar.progress(int((0.95 * progress_increment) * 100))
+                targeted_progress.text("No significant correlations found.")
                 return
     
             # Prepare data for bar chart
@@ -867,8 +874,8 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, cont
             st.pyplot(fig_bar)
     
             # Update progress
-            targeted_progress.progress(int((1.0) * progress_increment * 100))
-            targeted_status.text("Targeted Network Diagram generated.")
+            targeted_bar.progress(int((1.0) * progress_increment * 100))
+            targeted_progress.text("Targeted Network Diagram generated.")
 
 # -------------------------------
 # Main Streamlit App
@@ -883,19 +890,16 @@ def main():
     if mode == "Dark Mode":
         st.markdown("""
         <style>
-        /* Set dark background */
-        .reportview-container {
+        /* Set dark background and text colors */
+        body {
             background-color: #2e2e2e;
+            color: #dddddd;
         }
         
         /* Style headers */
         h1, h2, h3, h4, h5, h6 {
             color: #ffffff;
-        }
-        
-        /* Style text */
-        body {
-            color: #dddddd;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         }
         
         /* Style buttons */
@@ -922,24 +926,30 @@ def main():
         .plotly .main-svg {
             background-color: #2e2e2e !important;
         }
+        
+        /* Adjust sidebar styles */
+        [data-testid="stSidebar"] {
+            background-color: #333333;
+        }
+        
+        [data-testid="stSidebar"] .css-1d391kg {
+            color: #dddddd;
+        }
         </style>
         """, unsafe_allow_html=True)
     else:
         st.markdown("""
         <style>
-        /* Light Mode Styles */
-        .reportview-container {
+        /* Set light background and text colors */
+        body {
             background-color: #f5f5f5;
+            color: #555555;
         }
         
         /* Style headers */
         h1, h2, h3, h4, h5, h6 {
             color: #333333;
-        }
-        
-        /* Style text */
-        body {
-            color: #555555;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         }
         
         /* Style buttons */
@@ -965,6 +975,15 @@ def main():
         /* Style plotly charts */
         .plotly .main-svg {
             background-color: #ffffff !important;
+        }
+        
+        /* Adjust sidebar styles */
+        [data-testid="stSidebar"] {
+            background-color: #ffffff;
+        }
+        
+        [data-testid="stSidebar"] .css-1d391kg {
+            color: #555555;
         }
         </style>
         """, unsafe_allow_html=True)
