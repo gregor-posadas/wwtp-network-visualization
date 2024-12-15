@@ -148,7 +148,7 @@ def validate_correlation_matrix(df, n_iterations=500, alpha=0.05, progress_bar=N
 # Visualization Functions
 # -------------------------------
 
-def generate_heatmap(df, title, labels, container, mode):
+def generate_heatmap(df, title, labels, container):
     """
     Generate a heatmap and return the filtered correlation matrix.
     Each heatmap has its own progress bar and status text within its container.
@@ -171,6 +171,13 @@ def generate_heatmap(df, title, labels, container, mode):
     
         np.fill_diagonal(filtered_corr_matrix.values, 1)
     
+        # Check if the correlation matrix has valid data
+        if filtered_corr_matrix.empty or filtered_corr_matrix.isnull().all().all():
+            st.warning("Correlation matrix is empty or contains only NaN values.")
+            heatmap_bar.progress(100)
+            heatmap_progress.text("Heatmap generation incomplete due to insufficient data.")
+            return filtered_corr_matrix
+    
         fig = px.imshow(
             filtered_corr_matrix,
             text_auto=".2f",
@@ -192,13 +199,13 @@ def generate_heatmap(df, title, labels, container, mode):
             ),
             xaxis=dict(tickangle=45, title=None, tickfont=dict(size=12)),
             yaxis=dict(title=None, tickfont=dict(size=12)),
-            autosize=False,
+            autosize=True,
             width=800,
             height=600,
             margin=dict(l=100, r=100, t=100, b=100),
         )
     
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, use_container_width=True)
         
         # Complete progress
         heatmap_bar.progress(100)
@@ -206,7 +213,7 @@ def generate_heatmap(df, title, labels, container, mode):
         
         return filtered_corr_matrix
 
-def generate_network_diagram_streamlit(labels, correlation_matrices, parameters, container, mode, globally_shared=True):
+def generate_network_diagram_streamlit(labels, correlation_matrices, parameters, container, globally_shared=True):
     """
     Generate a parameter-based network diagram.
     If globally_shared is True, use globally shared parameters.
@@ -290,6 +297,8 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
     
         if G.number_of_nodes() == 0:
             st.warning("No nodes to display in the network diagram.")
+            network_bar.progress(100)
+            network_progress.text("Network Diagram generation incomplete.")
             return
     
         # Create a figure with GridSpec: 2 rows (network diagram and text boxes)
@@ -424,7 +433,7 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
         network_bar.progress(100)
         network_progress.text(f"{diagram_type} Network Diagram generation complete.")
 
-def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_matrices, container, mode, progress_increment):
+def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_matrices, container, progress_increment):
     """
     Generate a bar chart summarizing correlations for globally shared parameters across process pairs.
     Each bar chart has its own progress bar and status text within its container.
@@ -528,7 +537,7 @@ def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_
         bar_chart_bar.progress(100)
         bar_chart_progress.text("Bar Chart generation complete.")
 
-def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation_matrices, container, mode, progress_increment):
+def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation_matrices, container, progress_increment):
     """
     Generate a line graph summarizing correlations for globally shared parameters across process pairs.
     Each line graph has its own progress bar and status text within its container.
@@ -624,7 +633,7 @@ def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation
         line_graph_bar.progress(100)
         line_graph_progress.text("Line Graph generation complete.")
 
-def generate_targeted_network_diagram_streamlit(process_labels, dataframes, container, mode, progress_increment, n_iterations=500, alpha=0.05):
+def generate_targeted_network_diagram_streamlit(process_labels, dataframes, container, progress_increment, n_iterations=500, alpha=0.05):
     """
     Generate a targeted network diagram centered around a selected parameter from a selected process.
     Each targeted network diagram has its own progress bar and status text within its container.
@@ -882,301 +891,271 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, cont
 # -------------------------------
 
 def main():
-    # -------------------------------
-    # Dark Mode / Light Mode Toggle
-    # -------------------------------
-    mode = st.sidebar.radio("Select Theme", ("Light Mode", "Dark Mode"))
-    
-    if mode == "Dark Mode":
-        st.markdown("""
-        <style>
-        /* Set dark background and text colors */
-        body {
-            background-color: #2e2e2e;
-            color: #dddddd;
-        }
-        
-        /* Style headers */
-        h1, h2, h3, h4, h5, h6 {
-            color: #ffffff;
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        }
-        
-        /* Style buttons */
-        .stButton>button {
-            background-color: #1f77b4;
-            color: white;
-            border: none;
-            padding: 10px 24px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 14px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        
-        /* Style progress bars */
-        .stProgress > div > div > div {
-            background-color: #1f77b4;
-        }
-        
-        /* Style plotly charts */
-        .plotly .main-svg {
-            background-color: #2e2e2e !important;
-        }
-        
-        /* Adjust sidebar styles */
-        [data-testid="stSidebar"] {
-            background-color: #333333;
-        }
-        
-        [data-testid="stSidebar"] .css-1d391kg {
-            color: #dddddd;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <style>
-        /* Set light background and text colors */
-        body {
-            background-color: #f5f5f5;
-            color: #555555;
-        }
-        
-        /* Style headers */
-        h1, h2, h3, h4, h5, h6 {
-            color: #333333;
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        }
-        
-        /* Style buttons */
-        .stButton>button {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 24px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 14px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        
-        /* Style progress bars */
-        .stProgress > div > div > div {
-            background-color: #4CAF50;
-        }
-        
-        /* Style plotly charts */
-        .plotly .main-svg {
-            background-color: #ffffff !important;
-        }
-        
-        /* Adjust sidebar styles */
-        [data-testid="stSidebar"] {
-            background-color: #ffffff;
-        }
-        
-        [data-testid="stSidebar"] .css-1d391kg {
-            color: #555555;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-    
-    # -------------------------------
-    # Minimalist Aesthetic Styles
-    # -------------------------------
-    # Additional minimalist styles can be added here if needed.
+    st.set_page_config(page_title="WWTP Network Visualization", layout="wide")
     
     st.title("WWTP Unit Processes Network Visualization")
-    st.write("Upload your data files to generate correlation heatmaps and network diagrams.")
+    st.write("""
+    Welcome to the WWTP (Waste Water Treatment Plant) Unit Processes Network Visualization tool. 
+    This application allows you to upload multiple data files, generate correlation heatmaps, and visualize the relationships between different processes and parameters within your WWTP system.
+    """)
     
-    # File uploader
+    # -------------------------------
+    # Information Bar
+    # -------------------------------
+    st.info("""
+    **Instructions:**
+    
+    - **File Upload:**
+      - Upload multiple CSV or Excel files containing your WWTP process data.
+      - Each file must include a 'date' column and one or more parameter columns.
+      - Ensure that the parameter names are consistent across all files.
+    
+    - **File Ordering:**
+      - After uploading, assign an order to each file to define the sequence of processes.
+      - The order determines how correlation heatmaps and network diagrams are generated between processes.
+    
+    - **Visualization Interpretation:**
+      - **Heatmaps:** Display the correlation coefficients between parameters of consecutive processes.
+      - **Network Diagrams:** Illustrate significant correlations between parameters, highlighting positive and negative relationships.
+      - **Bar and Line Charts:** Summarize the strength of correlations across different process pairs.
+      - **Targeted Network Diagrams:** Focus on specific parameters within a chosen process to explore their connections.
+    
+    **CSV/Excel Formatting Requirements:**
+    
+    - **Columns:**
+      - Must include a 'date' column.
+      - Parameter columns should have consistent names across all files.
+    - **Date Format:**
+      - Dates should be in a recognizable date format (e.g., YYYY-MM-DD).
+    - **Data Quality:**
+      - Ensure there are no missing or non-numeric values in parameter columns.
+    """)
+    
+    # -------------------------------
+    # File Uploader
+    # -------------------------------
     uploaded_files = st.file_uploader(
-        "Choose CSV or Excel files",
+        "Upload CSV or Excel Files",
         accept_multiple_files=True,
         type=['csv', 'xlsx', 'xls']
     )
-    process_labels = []
-    dataframes = []
-    parameters_per_edge = []
     
     if uploaded_files:
-        num_files = len(uploaded_files)
-        for idx, uploaded_file in enumerate(uploaded_files):
-            st.subheader(f"Process File {idx + 1}: {uploaded_file.name}")
-            try:
-                # Read the uploaded file
-                if uploaded_file.name.endswith(('.xlsx', '.xls')):
-                    df = pd.read_excel(uploaded_file)
-                else:
-                    df = pd.read_csv(uploaded_file)
+        st.success(f"{len(uploaded_files)} files uploaded successfully.")
+        
+        # -------------------------------
+        # File Ordering Interface
+        # -------------------------------
+        st.subheader("Arrange Uploaded Files in Desired Order")
+        st.write("Assign a unique position number to each file to define the sequence of processes.")
+        
+        # Create a DataFrame to hold file names and their order
+        file_order = pd.DataFrame({
+            'Filename': [file.name for file in uploaded_files]
+        })
+        
+        # Initialize a list to hold the order numbers
+        order_numbers = []
+        total_files = len(uploaded_files)
+        
+        for idx, row in file_order.iterrows():
+            number = st.number_input(
+                f"Position for '{row['Filename']}'",
+                min_value=1,
+                max_value=total_files,
+                value=idx+1,
+                step=1,
+                key=f"order_{idx}"
+            )
+            order_numbers.append(number)
+        
+        file_order['Order'] = order_numbers
+        
+        # Check for unique order assignments
+        if file_order['Order'].nunique() != total_files:
+            st.error("Each file must have a unique position number. Please adjust the positions to avoid duplicates.")
+            st.stop()
+        
+        # Sort files based on the assigned order
+        file_order_sorted = file_order.sort_values('Order').reset_index(drop=True)
+        sorted_files = [file for file in uploaded_files if file.name in file_order_sorted['Filename'].values]
+        
+        # -------------------------------
+        # Confirmation Prompt
+        # -------------------------------
+        if st.button("Confirm File Upload and Order"):
+            st.success("All files have been uploaded and ordered successfully.")
+            
+            # -------------------------------
+            # Data Processing and Visualization
+            # -------------------------------
+            process_labels = []
+            dataframes = []
+            parameters_per_edge = []
+            
+            for idx, uploaded_file in enumerate(sorted_files):
+                st.subheader(f"Process File {idx + 1}: {uploaded_file.name}")
+                try:
+                    # Read the uploaded file
+                    if uploaded_file.name.endswith(('.xlsx', '.xls')):
+                        df = pd.read_excel(uploaded_file)
+                    else:
+                        df = pd.read_csv(uploaded_file)
     
-                df.columns = df.columns.str.lower().str.strip()
-                if 'date' not in df.columns:
-                    st.error(f"The file **{uploaded_file.name}** does not contain a 'date' column.")
+                    df.columns = df.columns.str.lower().str.strip()
+                    if 'date' not in df.columns:
+                        st.error(f"The file **{uploaded_file.name}** does not contain a 'date' column.")
+                        st.stop()
+    
+                    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+                    df = df.dropna(subset=["date"])
+                    df = remove_outliers_zscore(df)
+                    dataframes.append(df)
+    
+                    # Prompt user for a label for this process
+                    label = st.text_input(
+                        f"Enter a label for **{uploaded_file.name}**:",
+                        value=uploaded_file.name.split('.')[0],
+                        key=f"label_{idx}"
+                    )
+                    process_labels.append(label)
+                except Exception as e:
+                    st.error(f"Error processing file **{uploaded_file.name}**: {e}")
                     st.stop()
     
-                df['date'] = pd.to_datetime(df['date'], errors='coerce')
-                df = df.dropna(subset=["date"])
-                df = remove_outliers_zscore(df)
-                dataframes.append(df)
-    
-                # Prompt user for a label for this process
-                label = st.text_input(
-                    f"Enter a label for **{uploaded_file.name}**:",
-                    value=uploaded_file.name.split('.')[0],
-                    key=f"label_{idx}"
-                )
-                process_labels.append(label)
-            except Exception as e:
-                st.error(f"Error processing file **{uploaded_file.name}**: {e}")
+            if len(dataframes) < 2:
+                st.warning("Please upload at least two files to generate diagrams.")
                 st.stop()
     
-        if len(dataframes) < 2:
-            st.warning("Please upload at least two files to generate diagrams.")
-            st.stop()
+            # Identify common parameters
+            common_params = find_common_parameters(dataframes)
+            if not common_params:
+                st.error("No common parameters found across all uploaded files.")
+                st.stop()
     
-        # Identify common parameters
-        common_params = find_common_parameters(dataframes)
-        if not common_params:
-            st.error("No common parameters found across all uploaded files.")
-            st.stop()
+            st.success(f"Common parameters identified: {', '.join(common_params)}")
     
-        st.success(f"Common parameters identified: {', '.join(common_params)}")
+            # Assign progress fractions
+            num_heatmaps = len(dataframes) -1
+            heatmap_progress_fraction = 0.4  # 40%
+            heatmap_step = heatmap_progress_fraction / num_heatmaps
     
-        # Assign progress fractions
-        num_heatmaps = len(dataframes) -1
-        heatmap_progress = 0.4  # 40%
-        heatmap_step = heatmap_progress / num_heatmaps
+            network_diagram_progress_fraction = 0.3  # 30%
+            network_diagram_step = network_diagram_progress_fraction / 2  # Two diagrams
     
-        network_diagram_progress = 0.3  # 30%
-        network_diagram_step = network_diagram_progress / 2  # Two diagrams
+            bar_chart_progress_fraction = 0.1  # 10%
+            line_graph_progress_fraction = 0.1  # 10%
+            targeted_network_progress_fraction = 0.1  # 10%
     
-        bar_chart_progress = 0.1  # 10%
-        line_graph_progress = 0.1  # 10%
-        targeted_network_progress = 0.1  # 10%
+            # Generate heatmaps and store correlation matrices
+            correlation_matrices = []
+            parameters_per_edge = []
+            for i in range(len(dataframes) - 1):
+                heatmap_container = st.container()
+                merged_df = pd.merge(
+                    dataframes[i][['date'] + common_params],
+                    dataframes[i + 1][['date'] + common_params],
+                    on="date",
+                    suffixes=(f"_{process_labels[i]}", f"_{process_labels[i + 1]}")
+                ).drop(columns=["date"], errors="ignore") \
+                 .replace([np.inf, -np.inf], np.nan) \
+                 .dropna() \
+                 .select_dtypes(include=[np.number])
     
-        # Generate heatmaps and store correlation matrices
-        correlation_matrices = []
-        parameters_per_edge = []
-        for i in range(len(dataframes) - 1):
-            heatmap_container = st.container()
-            merged_df = pd.merge(
-                dataframes[i][['date'] + common_params],
-                dataframes[i + 1][['date'] + common_params],
-                on="date",
-                suffixes=(f"_{process_labels[i]}", f"_{process_labels[i + 1]}")
-            ).drop(columns=["date"], errors="ignore") \
-             .replace([np.inf, -np.inf], np.nan) \
-             .dropna() \
-             .select_dtypes(include=[np.number])
+                filtered_corr_matrix = generate_heatmap(
+                    df=merged_df,
+                    title=f"Correlation Coefficient Heatmap: {process_labels[i]} vs {process_labels[i + 1]}",
+                    labels=(process_labels[i], process_labels[i + 1]),
+                    container=heatmap_container
+                )
+                correlation_matrices.append(filtered_corr_matrix)
     
-            filtered_corr_matrix = generate_heatmap(
-                df=merged_df,
-                title=f"Correlation Coefficient Heatmap: {process_labels[i]} vs {process_labels[i + 1]}",
-                labels=(process_labels[i], process_labels[i + 1]),
-                container=heatmap_container,
-                mode=mode
+                # Identify parameters contributing to the correlation
+                shared_params = []
+                for param in common_params:
+                    infl_param = f"{param}_{process_labels[i]}"
+                    ode_param = f"{param}_{process_labels[i + 1]}"
+                    if infl_param in filtered_corr_matrix.index and ode_param in filtered_corr_matrix.columns:
+                        if filtered_corr_matrix.loc[infl_param, ode_param] != 0:
+                            shared_params.append(param)
+                parameters_per_edge.append(shared_params)
+    
+            # Identify globally shared parameters
+            globally_shared_parameters = set(parameters_per_edge[0])
+            for params in parameters_per_edge[1:]:
+                globally_shared_parameters &= set(params)
+    
+            st.markdown(f"**Globally shared parameters across all node pairs:** {', '.join(globally_shared_parameters) if globally_shared_parameters else 'None'}")
+            if not globally_shared_parameters:
+                st.error("No globally shared parameters found.")
+                st.stop()
+    
+            # Buttons to generate network diagrams and additional visualizations
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                if st.button("Generate Globally Shared Network Diagram"):
+                    network_container = st.container()
+                    generate_network_diagram_streamlit(
+                        labels=process_labels,
+                        correlation_matrices=correlation_matrices,
+                        parameters=globally_shared_parameters,
+                        container=network_container,
+                        globally_shared=True
+                    )
+    
+            with col2:
+                if st.button("Generate Locally Shared Network Diagram"):
+                    network_container = st.container()
+                    generate_network_diagram_streamlit(
+                        labels=process_labels,
+                        correlation_matrices=correlation_matrices,
+                        parameters=parameters_per_edge,
+                        container=network_container,
+                        globally_shared=False
+                    )
+    
+            with col3:
+                if st.button("Generate Bar Chart for Globally Shared Parameters"):
+                    bar_chart_container = st.container()
+                    plot_gspd_bar_chart(
+                        process_labels=process_labels,
+                        globally_shared_parameters=globally_shared_parameters,
+                        correlation_matrices=correlation_matrices,
+                        container=bar_chart_container,
+                        progress_increment=bar_chart_progress_fraction
+                    )
+    
+            with col4:
+                if st.button("Generate Line Graph for Globally Shared Parameters"):
+                    line_graph_container = st.container()
+                    plot_gspd_line_graph(
+                        process_labels=process_labels,
+                        globally_shared_parameters=globally_shared_parameters,
+                        correlation_matrices=correlation_matrices,
+                        container=line_graph_container,
+                        progress_increment=line_graph_progress_fraction
+                    )
+    
+            st.markdown("---")
+            st.markdown("### Additional Visualizations:")
+            st.write("Use the buttons above to generate network diagrams and correlation summary charts.")
+    
+            st.markdown("---")
+            st.markdown("### Targeted Network Diagram:")
+            st.write("Generate a network diagram centered around a specific parameter from a selected process.")
+    
+            # Integrate the targeted network diagram
+            targeted_network_container = st.container()
+            generate_targeted_network_diagram_streamlit(
+                process_labels=process_labels, 
+                dataframes=dataframes, 
+                container=targeted_network_container, 
+                progress_increment=targeted_network_progress_fraction
             )
-            correlation_matrices.append(filtered_corr_matrix)
     
-            # Identify parameters contributing to the correlation
-            shared_params = []
-            for param in common_params:
-                infl_param = f"{param}_{process_labels[i]}"
-                ode_param = f"{param}_{process_labels[i + 1]}"
-                if infl_param in filtered_corr_matrix.index and ode_param in filtered_corr_matrix.columns:
-                    if filtered_corr_matrix.loc[infl_param, ode_param] != 0:
-                        shared_params.append(param)
-            parameters_per_edge.append(shared_params)
+    # -------------------------------
+    # Run the Streamlit App
+    # -------------------------------
     
-        # Identify globally shared parameters
-        globally_shared_parameters = set(parameters_per_edge[0])
-        for params in parameters_per_edge[1:]:
-            globally_shared_parameters &= set(params)
-    
-        st.markdown(f"**Globally shared parameters across all node pairs:** {', '.join(globally_shared_parameters) if globally_shared_parameters else 'None'}")
-        if not globally_shared_parameters:
-            st.error("No globally shared parameters found.")
-            st.stop()
-    
-        # Buttons to generate network diagrams and additional visualizations
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            if st.button("Generate Globally Shared Network Diagram"):
-                network_container = st.container()
-                generate_network_diagram_streamlit(
-                    labels=process_labels,
-                    correlation_matrices=correlation_matrices,
-                    parameters=globally_shared_parameters,
-                    container=network_container,
-                    mode=mode,
-                    globally_shared=True
-                )
-    
-        with col2:
-            if st.button("Generate Locally Shared Network Diagram"):
-                network_container = st.container()
-                generate_network_diagram_streamlit(
-                    labels=process_labels,
-                    correlation_matrices=correlation_matrices,
-                    parameters=parameters_per_edge,
-                    container=network_container,
-                    mode=mode,
-                    globally_shared=False
-                )
-    
-        with col3:
-            if st.button("Generate Bar Chart for Globally Shared Parameters"):
-                bar_chart_container = st.container()
-                plot_gspd_bar_chart(
-                    process_labels=process_labels,
-                    globally_shared_parameters=globally_shared_parameters,
-                    correlation_matrices=correlation_matrices,
-                    container=bar_chart_container,
-                    mode=mode,
-                    progress_increment=bar_chart_progress
-                )
-    
-        with col4:
-            if st.button("Generate Line Graph for Globally Shared Parameters"):
-                line_graph_container = st.container()
-                plot_gspd_line_graph(
-                    process_labels=process_labels,
-                    globally_shared_parameters=globally_shared_parameters,
-                    correlation_matrices=correlation_matrices,
-                    container=line_graph_container,
-                    mode=mode,
-                    progress_increment=line_graph_progress
-                )
-    
-        st.markdown("---")
-        st.markdown("### Additional Visualizations:")
-        st.write("Use the buttons above to generate network diagrams and correlation summary charts.")
-    
-        st.markdown("---")
-        st.markdown("### Targeted Network Diagram:")
-        st.write("Generate a network diagram centered around a specific parameter from a selected process.")
-    
-        # Integrate the targeted network diagram
-        targeted_network_container = st.container()
-        generate_targeted_network_diagram_streamlit(
-            process_labels=process_labels, 
-            dataframes=dataframes, 
-            container=targeted_network_container, 
-            mode=mode, 
-            progress_increment=targeted_network_progress
-        )
-
-# -------------------------------
-# Run the Streamlit App
-# -------------------------------
-
-if __name__ == "__main__":
-    main()
+    if __name__ == "__main__":
+        main()
