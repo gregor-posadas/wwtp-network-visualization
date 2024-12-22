@@ -106,6 +106,9 @@ The **WWTP Statistical Framework and Visualization Tool** is a comprehensive Pyt
    - After running the above command, Streamlit will provide a local URL (e.g., `http://localhost:8501`).
    - Open this URL in your web browser to interact with the tool.
 
+5. **Direct Access to Streamlit App**
+   - Alternatively, if you just want to access the tool directly on your browser, go to https://wwtp-network-visualization.streamlit.app/.
+   - Streamlit automatically "hibernates" apps that have not been used for a while, so you may be prompted to reactivate the app.
 ---
 
 ## How to Use
