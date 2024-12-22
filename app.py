@@ -896,11 +896,13 @@ def main():
     
     2. **Label Processes:** Assign descriptive labels to each uploaded process file.
     
-    3. **Reorder Processes:** After uploading, assign an order to the processes based on their real-life sequence (upstream to downstream).
+    3. **Select Date Range:** Choose the specific date range you want to analyze.
     
-    4. **Generate Visualizations:** Click the buttons to generate correlation heatmaps, network diagrams, bar charts, and line graphs.
+    4. **Reorder Processes:** After uploading, assign an order to the processes based on their real-life sequence (upstream to downstream).
     
-    5. **Targeted Network Diagram:** Use the section below to generate a network diagram centered around a specific parameter from a selected process.
+    5. **Generate Visualizations:** Click the buttons to generate correlation heatmaps, network diagrams, bar charts, and line graphs.
+    
+    6. **Targeted Network Diagram:** Use the section below to generate a network diagram centered around a specific parameter from a selected process.
     
     
     """, unsafe_allow_html=True)
@@ -1007,7 +1009,55 @@ def main():
         st.markdown("</div>", unsafe_allow_html=True)
 
         # -------------------------------
-        # 4. Generate Heatmaps and Store Correlation Matrices
+        # 4. Select Date Range
+        # -------------------------------
+        st.markdown("<div class='section'>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>Select Date Range</div>", unsafe_allow_html=True)
+
+        # Combine all dates from the sorted dataframes
+        all_dates = pd.concat([df['date'] for df in dataframes_sorted])
+
+        # Determine the overall minimum and maximum dates
+        min_date = all_dates.min()
+        max_date = all_dates.max()
+
+        # Display the date range picker
+        selected_dates = st.date_input(
+            "Select Date Range for Analysis",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date,
+            help="Choose the start and end dates for the analysis."
+        )
+
+        # Ensure that the user has selected a start and end date
+        if isinstance(selected_dates, tuple) and len(selected_dates) == 2:
+            start_date, end_date = selected_dates
+        else:
+            st.error("Please select a valid start and end date.")
+            st.stop()
+
+        # Apply the date filter to each dataframe
+        dataframes_filtered = []
+        for idx, df in enumerate(dataframes_sorted):
+            filtered_df = df[(df['date'] >= pd.to_datetime(start_date)) & (df['date'] <= pd.to_datetime(end_date))]
+            dataframes_filtered.append(filtered_df)
+            st.write(f"**{process_labels_sorted[idx]}**: {len(filtered_df)} records after filtering.")
+
+        # Update the dataframes_sorted to the filtered dataframes
+        dataframes_sorted = dataframes_filtered
+
+        # Recompute common parameters after filtering
+        common_params = find_common_parameters(dataframes_sorted)
+        if not common_params:
+            st.error("No common parameters found after applying the date filter.")
+            st.stop()
+
+        st.success(f"Common parameters after date filtering: {', '.join(common_params)}")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # -------------------------------
+        # 5. Generate Heatmaps and Store Correlation Matrices
         # -------------------------------
         st.markdown("<div class='section'>", unsafe_allow_html=True)
         st.markdown("<div class='section-title'>Generate Heatmaps</div>", unsafe_allow_html=True)
@@ -1059,7 +1109,7 @@ def main():
         st.markdown("</div>", unsafe_allow_html=True)
 
         # -------------------------------
-        # 5. Identify Globally Shared Parameters
+        # 6. Identify Globally Shared Parameters
         # -------------------------------
         st.markdown("<div class='section'>", unsafe_allow_html=True)
         st.markdown("<div class='section-title'>Globally Shared Parameters</div>", unsafe_allow_html=True)
@@ -1074,7 +1124,7 @@ def main():
         st.markdown("</div>", unsafe_allow_html=True)
 
         # -------------------------------
-        # 6. Generate Network Diagrams and Charts with Separate Progress Bars
+        # 7. Generate Network Diagrams and Charts with Separate Progress Bars
         # -------------------------------
         st.markdown("<div class='section'>", unsafe_allow_html=True)
         st.markdown("<div class='section-title'>Generate Visualizations</div>", unsafe_allow_html=True)
@@ -1147,7 +1197,7 @@ def main():
         st.markdown("</div>", unsafe_allow_html=True)
 
         # -------------------------------
-        # 7. Targeted Network Diagram Section with Separate Progress Bar
+        # 8. Targeted Network Diagram Section with Separate Progress Bar
         # -------------------------------
         st.markdown("<div class='section'>", unsafe_allow_html=True)
         st.markdown("<div class='section-title'>Targeted Network Diagram</div>", unsafe_allow_html=True)
