@@ -221,7 +221,3 @@ For questions, support, or suggestions, please reach out to:
 **Gregor Posadas**  
 Email: [gregorposadas@u.boisestate.edu](mailto:gregorposadas@u.boisestate.edu)  
 Feel free to connect via email for any inquiries related to the **WWTP Statistical Framework and Visualization Tool**.
-
----
-
-By leveraging the **WWTP Statistical Framework and Visualization Tool**, users can transform their wastewater treatment data into insightful analyses, driving operational excellence and environmental compliance.
