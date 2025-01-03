@@ -632,7 +632,7 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
     alpha = st.number_input(
         "Set Significance Level (alpha):",
         min_value=0.0001,
-        max_value=0.1,
+        max_value=1.0,
         value=0.05,
         step=0.005,
         help="Adjust the significance level for correlation filtering."
