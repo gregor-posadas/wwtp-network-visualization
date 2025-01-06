@@ -64,7 +64,9 @@ def bootstrap_correlations(df, n_iterations=500, method='pearson', progress_bar=
         if progress_bar and status_text:
             # Calculate incremental progress
             progress = start_progress + (i + 1) / n_iterations * (end_progress - start_progress)
+            progress = max(0, min(1, progress))  # Clamp progress between 0 and 1
             progress_bar.progress(int(progress * 100))
+
             status_text.text(f"Bootstrapping {method.capitalize()} Correlations... ({i+1}/{n_iterations})")
 
     median_corr = pd.concat(correlations).groupby(level=0).median()
@@ -122,24 +124,21 @@ def find_common_parameters(dataframes):
     return list(common_columns)
 
 def remove_outliers_zscore(df, threshold=3):
-    import streamlit as st
-    import numpy as np
-    from scipy import stats
-
-    st.write("Applying Z-Score Method to filter outliers...")
+    """
+    Remove outliers from a DataFrame using the Z-score method.
+    """
+    st.write(f"Applying Z-Score Method to filter outliers (threshold={threshold})...")
     numeric_cols = df.select_dtypes(include=[np.number]).columns
-    if len(numeric_cols) == 0:
-        st.write("[DEBUG] No numeric columns found, skipping outlier removal.")
-        return df
-
-    before_count = len(df)
     z_scores = np.abs(stats.zscore(df[numeric_cols], nan_policy="omit"))
-    mask = (z_scores < threshold).all(axis=1)
-    filtered_df = df[mask]
-    after_count = len(filtered_df)
+    outlier_mask = (z_scores >= threshold).any(axis=1)
 
-    st.write(f"[DEBUG] Outlier removal: removed {before_count - after_count} rows (threshold={threshold}). Remaining: {after_count}")
+    # Log flagged rows and retained rows
+    st.write(f"[DEBUG] Rows flagged as outliers:\n{df[outlier_mask]}")
+    filtered_df = df[~outlier_mask]
+    st.write(f"[DEBUG] Rows retained after outlier removal:\n{filtered_df}")
+    st.write(f"Outliers removed: {len(df) - len(filtered_df)}")
     return filtered_df
+
 
 def validate_correlation_matrix(df, n_iterations=500, alpha=0.05, progress_bar=None, status_text=None, start_progress=0.0, end_progress=1.0):
     import streamlit as st
@@ -178,6 +177,12 @@ def validate_correlation_matrix(df, n_iterations=500, alpha=0.05, progress_bar=N
 
     st.write("[DEBUG] Calculating and correcting p-values now...")
     p_values = calculate_p_values(df, method='pearson')
+
+    # Safeguard for empty or invalid p-values
+    if p_values.empty or p_values.size == 0:
+        st.write("[DEBUG] No valid p-values for FDR correction. Skipping.")
+        return pd.DataFrame()  # Return empty DataFrame if no p-values are available
+
     corrected_p_values = correct_p_values(p_values)
 
     sig_mask = (corrected_p_values < alpha).astype(int)
@@ -306,7 +311,9 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
 
         if progress_bar and status_text:
             progress = start_progress + (i +1)/total_connections * (end_progress - start_progress)
+            progress = max(0, min(1, progress))  # Clamp progress between 0 and 1
             progress_bar.progress(int(progress * 100))
+
             status_text.text(f"Processing connection: {node1} → {node2}")
 
     if G.number_of_nodes() == 0:
@@ -446,7 +453,9 @@ def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_
                 data[param].append(0)  # Fill missing correlations with 0
             step +=1
             progress = (step / total_steps) * progress_increment
+            progress = max(0, min(1, progress))  # Clamp progress between 0 and 1
             progress_bar.progress(int(progress * 100))
+
             status_text.text(f"Generating Bar Chart... ({step}/{total_steps})")
 
     # Compute y-limits for consistent axes
@@ -477,7 +486,9 @@ def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_
         # Update progress
         step +=1
         progress = (step / total_steps) * progress_increment
+        progress = max(0, min(1, progress))  # Clamp progress between 0 and 1
         progress_bar.progress(int(progress * 100))
+
         status_text.text(f"Generating Bar Chart... ({step}/{total_steps})")
 
     ax.set_xlabel("Process Pairs", fontsize=12)
@@ -546,7 +557,9 @@ def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation
 
             step +=1
             progress = (step / total_steps) * progress_increment
+            progress = max(0, min(1, progress))  # Clamp progress between 0 and 1
             progress_bar.progress(int(progress * 100))
+
             status_text.text(f"[DEBUG] Generating Line Graph... ({step}/{total_steps})")
 
     all_correlations = [corr for correlations in data.values() for corr in correlations]
@@ -566,7 +579,9 @@ def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation
 
         step +=1
         progress = (step / total_steps) * progress_increment
+        progress = max(0, min(1, progress))  # Clamp progress between 0 and 1
         progress_bar.progress(int(progress * 100))
+
         status_text.text(f"[DEBUG] Generating Line Graph... ({step}/{total_steps})")
 
     ax.set_xlabel("Process Pairs", fontsize=12)
@@ -644,7 +659,9 @@ def generate_targeted_network_diagram_streamlit(
 
         # Update status
         status_text.text("Preparing data for targeted network diagram...")
-        progress_bar.progress(int(0.05 * progress_increment * 100))
+        progress = max(0, min(1, progress))  # Clamp progress between 0 and 1
+        progress_bar.progress(int(progress * 100))
+
 
         # 1) Prepare data for correlations
         combined_df = selected_dataframe[['date', selected_parameter]].copy()
@@ -675,6 +692,11 @@ def generate_targeted_network_diagram_streamlit(
         numeric_cols = combined_df.select_dtypes(include=[np.number]).columns
         combined_df = combined_df[numeric_cols]
 
+        st.write("**[DEBUG] Combined DataFrame Before Outlier Removal**")
+        st.write(f"Shape: {combined_df.shape}")
+        st.dataframe(combined_df.head(10))  # Show the first 10 rows of the DataFrame
+
+
         # [DEBUG] Show shape & sample
         st.write("[DEBUG] Combined DF shape (pre-outlier):", combined_df.shape)
         st.dataframe(combined_df.head(5))
@@ -688,7 +710,9 @@ def generate_targeted_network_diagram_streamlit(
         after_outliers = len(combined_df)
         st.write(f"[DEBUG] Outlier removal: removed {before_outliers - after_outliers}. Remaining: {len(combined_df)}")
 
-        progress_bar.progress(int(0.10 * progress_increment * 100))
+        progress = max(0, min(1, progress))  # Clamp progress between 0 and 1
+        progress_bar.progress(int(progress * 100))
+
 
         # 3) Bootstrapping
         from sklearn.utils import resample
@@ -739,7 +763,9 @@ def generate_targeted_network_diagram_streamlit(
         mask_sig = (pvals_corr_s < alpha)
         if not mask_sig.any():
             st.warning("No significant correlations found.")
-            progress_bar.progress(int(0.95 * progress_increment * 100))
+            progress = max(0, min(1, progress))  # Clamp progress between 0 and 1
+            progress_bar.progress(int(progress * 100))
+
             return
 
         sig_corr_vals = target_correlations[mask_sig]
@@ -856,7 +882,9 @@ def generate_targeted_network_diagram_streamlit(
 
         try:
             end_progress = min(max(progress_increment, 0), 1)
-            progress_bar.progress(int(end_progress * 100))
+            progress = max(0, min(1, progress))  # Clamp progress between 0 and 1
+            progress_bar.progress(int(progress * 100))
+
             status_text.text("Targeted Network Diagram generated.")
         except Exception as e:
             st.error(f"Error updating progress bar: {e}")
