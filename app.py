@@ -657,11 +657,19 @@ def generate_targeted_network_diagram_streamlit(
     if st.button("Generate Targeted Network Diagram"):
         st.write(f"Generating network diagram for **{selected_parameter}** in **{selected_process_label}** with alpha={alpha}...")
 
+        # Initialize progress
+        progress = 0  # Start at 0% progress
+
         # Update status
         status_text.text("Preparing data for targeted network diagram...")
+
+        # Increment progress (example value; replace with your actual calculation)
+        progress += progress_increment * 0.05  # Data preparation as 5% of progress
         progress = max(0, min(1, progress))  # Clamp progress between 0 and 1
         progress_bar.progress(int(progress * 100))
 
+        # Your further logic goes here...
+        st.write("[DEBUG] Progress updated after initialization.")
 
         # 1) Prepare data for correlations
         combined_df = selected_dataframe[['date', selected_parameter]].copy()
