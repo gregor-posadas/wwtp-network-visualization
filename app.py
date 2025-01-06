@@ -809,7 +809,7 @@ def generate_targeted_network_diagram_streamlit(
             for e in G.edges
         ]
         edge_weights = [abs(G.edges[e]['correlation']) * 5 for e in G.edges]
-        edge_labels = {(u, v): f"{G.edges[(u, v)]['correlation']:.2f}" for u, v in G.edges]
+        edge_labels = [(u, v): f"{G.edges[(u, v)]['correlation']:.2f}" for u, v in G.edges]
 
         nx.draw_networkx_edges(G, pos, edge_color=edge_colors, width=edge_weights, ax=ax)
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='blue', font_size=8, ax=ax)
