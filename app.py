@@ -322,7 +322,6 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
     parameter_colors = dict(zip(unique_parameters, base_colors[:num_params]))
 
     # Function to adjust color intensity based on correlation strength
-    from matplotlib.colors import to_rgba
     def adjust_color_intensity(base_color, corr_value):
         rgba = to_rgba(base_color)
         intensity = 1.0  # Keep alpha at 1 for consistency
@@ -418,16 +417,202 @@ def plot_gspd_bar_chart(process_labels, globally_shared_parameters, correlation_
     Generate a bar chart summarizing correlations for globally shared parameters across process pairs.
     """
     st.write("### Bar Chart: Globally Shared Parameter Correlations")
-    # ...unchanged...
+    
+    # Initialize data structure for correlations
+    data = {param: [] for param in globally_shared_parameters}
+    process_pairs = []
+
+    num_process_pairs = len(correlation_matrices)
+    num_parameters = len(globally_shared_parameters)
+    total_steps = num_process_pairs * num_parameters
+    step = 0
+
+    # Collect correlation data for each process pair
+    for i, matrix in enumerate(correlation_matrices):
+        pair_label = f"{process_labels[i]} → {process_labels[i + 1]}"
+        process_pairs.append(pair_label)
+
+        for param in globally_shared_parameters:
+            infl_param = f"{param}_{process_labels[i]}"
+            ode_param = f"{param}_{process_labels[i + 1]}"
+
+            if infl_param in matrix.index and ode_param in matrix.columns:
+                corr_value = matrix.loc[infl_param, ode_param]
+                data[param].append(corr_value)
+            else:
+                data[param].append(0)  # Fill missing correlations with 0
+            step +=1
+            progress = (step / total_steps) * progress_increment
+            progress_bar.progress(int(progress * 100))
+            status_text.text(f"Generating Bar Chart... ({step}/{total_steps})")
+
+    # Compute y-limits for consistent axes
+    all_correlations = [corr for correlations in data.values() for corr in correlations]
+    ymin = min(all_correlations + [0])
+    ymax = max(all_correlations + [0])
+    y_range = ymax - ymin
+    margin = y_range * 0.1  # Add 10% margin
+    ymin -= margin
+    ymax += margin
+
+    # Plot bar chart
+    num_process_pairs = len(process_pairs)
+    num_parameters = len(globally_shared_parameters)
+    total_bar_width = 0.8  # Total width for all bars at one x position
+    bar_width = total_bar_width / num_parameters
+
+    x = np.arange(num_process_pairs)  # Positions of the process pairs
+
+    fig, ax = plt.subplots(figsize=(14, 8))
+
+    # Plot bars
+    for i, (param, correlations) in enumerate(sorted(data.items())):
+        offset = (i - (num_parameters - 1) / 2) * bar_width
+        x_positions = x + offset
+        ax.bar(x_positions, correlations, bar_width, label=param, alpha=0.9)
+
+        # Update progress
+        step +=1
+        progress = (step / total_steps) * progress_increment
+        progress_bar.progress(int(progress * 100))
+        status_text.text(f"Generating Bar Chart... ({step}/{total_steps})")
+
+    ax.set_xlabel("Process Pairs", fontsize=12)
+    ax.set_ylabel("Correlation Coefficient (r)", fontsize=12)
+
+    # Adjust the title position
+    ax.set_title("Globally Shared Parameter Correlations (Bar Chart)", fontsize=16, weight="bold", pad=30)
+
+    # Adjust x-ticks
+    ax.set_xticks(x)
+    ax.set_xticklabels(process_pairs, rotation=45, ha="right")
+
+    # Set y-limits
+    ax.set_ylim(ymin, ymax)
+
+    # Add horizontal line at r=0
+    ax.axhline(y=0, color='black', linewidth=1)
+
+    # Adjust the layout to make room for the legend and title
+    fig.subplots_adjust(top=0.85, bottom=0.2)
+
+    # Position the legend just below the title and add a box around it
+    legend = fig.legend(
+        title="Parameters",
+        loc='upper center',
+        bbox_to_anchor=(0.5, 0.90),
+        ncol=len(globally_shared_parameters),
+        frameon=True  # Add a box around the legend
+    )
+
+    # Adjust the legend's transparency and outline color
+    legend.get_frame().set_facecolor('white')  # Set legend background color to white
+    legend.get_frame().set_alpha(1.0)  # Make legend opaque
+    legend.get_frame().set_edgecolor('black')  # Set legend outline color to black
+
+    st.pyplot(fig)
 
 def plot_gspd_line_graph(process_labels, globally_shared_parameters, correlation_matrices, progress_bar, status_text, progress_increment):
     """
     Generate a line graph summarizing correlations for globally shared parameters across process pairs.
     """
     st.write("### Line Graph: Globally Shared Parameter Correlations")
-    # ...unchanged...
+    
+    # Initialize data structure for correlations
+    data = {param: [] for param in globally_shared_parameters}
+    process_pairs = []
 
-def generate_targeted_network_diagram_streamlit(process_labels, dataframes, progress_bar, status_text, progress_increment, n_iterations=500, alpha=0.05):
+    num_process_pairs = len(correlation_matrices)
+    num_parameters = len(globally_shared_parameters)
+    total_steps = num_process_pairs * num_parameters
+    step = 0
+
+    # Collect correlation data for each process pair
+    for i, matrix in enumerate(correlation_matrices):
+        pair_label = f"{process_labels[i]} → {process_labels[i + 1]}"
+        process_pairs.append(pair_label)
+
+        for param in globally_shared_parameters:
+            infl_param = f"{param}_{process_labels[i]}"
+            ode_param = f"{param}_{process_labels[i + 1]}"
+
+            if infl_param in matrix.index and ode_param in matrix.columns:
+                corr_value = matrix.loc[infl_param, ode_param]
+                data[param].append(corr_value)
+            else:
+                data[param].append(0)  # Fill missing correlations with 0
+            step +=1
+            progress = (step / total_steps) * progress_increment
+            progress_bar.progress(int(progress * 100))
+            status_text.text(f"Generating Line Graph... ({step}/{total_steps})")
+
+    # Use the same y-limits as the bar chart
+    all_correlations = [corr for correlations in data.values() for corr in correlations]
+    ymin = min(all_correlations + [0])
+    ymax = max(all_correlations + [0])
+    y_range = ymax - ymin
+    margin = y_range * 0.1  # Add 10% margin
+    ymin -= margin
+    ymax += margin
+
+    x = np.arange(len(process_pairs))  # Positions of the process pairs
+
+    fig, ax = plt.subplots(figsize=(14, 8))
+
+    # Plot lines
+    for i, (param, correlations) in enumerate(sorted(data.items())):
+        ax.plot(x, correlations, marker='o', linewidth=2, label=param)
+
+        # Update progress
+        step +=1
+        progress = (step / total_steps) * progress_increment
+        progress_bar.progress(int(progress * 100))
+        status_text.text(f"Generating Line Graph... ({step}/{total_steps})")
+
+    ax.set_xlabel("Process Pairs", fontsize=12)
+    ax.set_ylabel("Correlation Coefficient (r)", fontsize=12)
+
+    # Adjust the title position
+    ax.set_title("Globally Shared Parameter Correlations (Line Graph)", fontsize=16, weight="bold", pad=30)
+
+    # Adjust x-ticks
+    ax.set_xticks(x)
+    ax.set_xticklabels(process_pairs, rotation=45, ha="right")
+
+    # Set y-limits
+    ax.set_ylim(ymin, ymax)
+
+    # Add horizontal line at r=0
+    ax.axhline(y=0, color='black', linewidth=1)
+
+    # Adjust the layout to make room for the legend and title
+    fig.subplots_adjust(top=0.85, bottom=0.2)
+
+    # Position the legend just below the title and add a box around it
+    legend = fig.legend(
+        title="Parameters",
+        loc='upper center',
+        bbox_to_anchor=(0.5, 0.90),
+        ncol=len(globally_shared_parameters),
+        frameon=True  # Add a box around the legend
+    )
+
+    # Adjust the legend's transparency and outline color
+    legend.get_frame().set_facecolor('white')  # Set legend background color to white
+    legend.get_frame().set_alpha(1.0)  # Make legend opaque
+    legend.get_frame().set_edgecolor('black')  # Set legend outline color to black
+
+    st.pyplot(fig)
+
+def generate_targeted_network_diagram_streamlit(
+    process_labels,
+    dataframes,
+    progress_bar,
+    status_text,
+    progress_increment,
+    n_iterations=500,
+    alpha=0.05
+):
     """
     Generate a targeted network diagram centered around a selected parameter from a selected process.
     Allows independent adjustment of the significance level (alpha).
@@ -474,7 +659,10 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
 
         # Include parameters from the same process
         df_same_process = selected_dataframe.drop(columns=[selected_parameter], errors='ignore')
-        df_same_process.columns = [f"{col}_{selected_process_label}" if col != 'date' else 'date' for col in df_same_process.columns]
+        df_same_process.columns = [
+            f"{col}_{selected_process_label}" if col != 'date' else 'date'
+            for col in df_same_process.columns
+        ]
 
         # Merge on 'date'
         combined_df = pd.merge(combined_df, df_same_process, on='date', how='inner')
@@ -484,21 +672,22 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
             if idx != process_choice:
                 process_label = process_labels[idx]
                 df_temp = df.copy()
-                df_temp.columns = [f"{col}_{process_label}" if col != 'date' else 'date' for col in df_temp.columns]
+                df_temp.columns = [
+                    f"{col}_{process_label}" if col != 'date' else 'date'
+                    for col in df_temp.columns
+                ]
                 combined_df = pd.merge(combined_df, df_temp, on='date', how='inner')
-
-        # ----------------------------------------------------------------
-        # DEBUG: Print final merged DataFrame before correlation, etc.
-        # ----------------------------------------------------------------
-        st.write("**[DEBUG] Final Merged DataFrame (Targeted)**")      # <-- ADDED THIS
-        st.write("Shape:", combined_df.shape)                          # <-- ADDED THIS
-        st.dataframe(combined_df.head(10))                             # <-- ADDED THIS
 
         # Handle invalid values
         combined_df = combined_df.replace([np.inf, -np.inf], np.nan)
         combined_df = combined_df.dropna()
         numeric_columns = combined_df.select_dtypes(include=[np.number]).columns
         combined_df = combined_df[numeric_columns]
+
+        # [DEBUG ADDED] Show final merged DataFrame before outlier removal
+        st.write("**[DEBUG] Final Merged DataFrame Before Outlier Removal**")
+        st.write("Shape:", combined_df.shape)
+        st.dataframe(combined_df.head(10))
 
         # Apply Z-score outlier removal
         combined_df = remove_outliers_zscore(combined_df, threshold=3)
@@ -541,14 +730,15 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
         if target_param_full not in avg_corr_matrix.columns:
             st.error(f"The selected parameter '{selected_parameter}' is not available in the data.")
             return
+
         target_correlations = avg_corr_matrix[target_param_full].drop(target_param_full)
 
-        # Calculate p-values (Pearson only)
+        # Calculate p-values
         status_text.text("Calculating and correcting p-values...")
         p_values = pd.Series(dtype=float)
         for col in target_correlations.index:
             if np.all(combined_df[target_param_full] == combined_df[col]):
-                # Perfect correlation => p=0 or p=1? We'll do p=0 for significance.
+                # Perfect correlation, p-value is zero
                 p_values[col] = 0.0
                 continue
             try:
@@ -556,7 +746,7 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
                 p_values[col] = p_val
             except Exception as e:
                 st.error(f"Error calculating p-value between {target_param_full} and {col}: {e}")
-                p_values[col] = 1.0
+                p_values[col] = 1.0  # Assign non-significant p-value
                 continue
 
         # Apply multiple testing correction
@@ -565,13 +755,14 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
         significant_correlations = target_correlations[significance_mask]
         significant_p_values = corrected_p_values[significance_mask]
 
+        # Check if any significant correlations are found
         if significant_correlations.empty:
             st.warning("No significant correlations found with the selected alpha level.")
             progress_bar.progress(int((0.95 * progress_increment) * 100))
             status_text.text("No significant correlations found.")
             return
 
-        # Build DataFrame of significant correlations for bar chart, etc.
+        # Prepare data for bar chart
         corr_data = pd.DataFrame({
             'Parameter': significant_correlations.index,
             'Correlation': significant_correlations.values,
@@ -581,22 +772,20 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
         corr_data['Parameter Name'] = corr_data['Parameter'].apply(lambda x: x.rsplit('_', 1)[0])
         corr_data = corr_data.sort_values('Correlation', key=abs, ascending=False)
 
-        # ------------------------------------------------------------------
-        # DEBUG: Show table of significant correlations (Targeted Diagram)
-        # ------------------------------------------------------------------
-        st.write("### Table of Significant Correlations (Targeted)")   # <-- ADDED THIS
-        st.dataframe(corr_data)                                        # <-- ADDED THIS
+        # [DEBUG ADDED] Show table of significant correlations
+        st.write("**[DEBUG] Table of Significant Correlations**")
+        st.write("Number of significant correlations:", len(corr_data))
+        st.dataframe(corr_data)
 
         # Separate internal and external correlations
         internal_corr = corr_data[corr_data['Process'] == selected_process_label]
         external_corr = corr_data[corr_data['Process'] != selected_process_label]
 
         # Generate the network diagram
-        import networkx as nx
         G = nx.Graph()
         G.add_node(target_param_full, label=selected_parameter, process=selected_process_label)
 
-        # Internal correlations
+        # Add internal correlations
         for idx, row in internal_corr.iterrows():
             G.add_node(row['Parameter'], label=row['Parameter Name'], process=row['Process'])
             G.add_edge(
@@ -606,7 +795,7 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
                 weight=abs(row['Correlation'])
             )
 
-        # External correlations
+        # Add external correlations
         for idx, row in external_corr.iterrows():
             G.add_node(row['Parameter'], label=row['Parameter Name'], process=row['Process'])
             G.add_edge(
@@ -619,9 +808,15 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
         # Draw the network diagram
         pos = nx.spring_layout(G, seed=42)
 
-        # Adjust node positions to separate internal/external correlations
-        internal_nodes = [node for node in G.nodes if G.nodes[node]['process'] == selected_process_label and node != target_param_full]
-        external_nodes = [node for node in G.nodes if G.nodes[node]['process'] != selected_process_label]
+        # Adjust node positions to separate internal and external correlations
+        internal_nodes = [
+            node for node in G.nodes
+            if G.nodes[node]['process'] == selected_process_label and node != target_param_full
+        ]
+        external_nodes = [
+            node for node in G.nodes
+            if G.nodes[node]['process'] != selected_process_label
+        ]
         target_pos = pos[target_param_full]
         for node in internal_nodes:
             pos[node][0] -= 0.5
@@ -630,6 +825,7 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
 
         fig, ax = plt.subplots(figsize=(14, 10))
 
+        # Node colors based on process
         processes = list(set(nx.get_node_attributes(G, 'process').values()))
         color_map = {proc: idx for idx, proc in enumerate(processes)}
         cmap = plt.get_cmap('tab20')
@@ -639,26 +835,59 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
         node_colors = [process_color_mapping[G.nodes[node]['process']] for node in G.nodes]
 
         nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=3000, ax=ax)
-        labels = {node: f"{G.nodes[node]['label']}\n({G.nodes[node]['process']})" for node in G.nodes}
+        labels = {
+            node: f"{G.nodes[node]['label']}\n({G.nodes[node]['process']})"
+            for node in G.nodes
+        }
         nx.draw_networkx_labels(G, pos, labels=labels, font_size=10, ax=ax)
 
-        edge_colors = ['green' if G.edges[edge]['correlation'] > 0 else 'red' for edge in G.edges]
+        # Edge colors and labels
+        edge_colors = [
+            'green' if G.edges[edge]['correlation'] > 0 else 'red'
+            for edge in G.edges
+        ]
         edge_weights = [G.edges[edge]['weight'] * 5 for edge in G.edges]
-        edge_labels = {(u, v): f"{G.edges[(u, v)]['correlation']:.2f}" for u, v in G.edges}
-        nx.draw_networkx_edges(G, pos, edge_color=edge_colors, width=edge_weights, ax=ax)
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='blue', font_size=8, ax=ax)
+        edge_labels = {
+            (u, v): f"{G.edges[(u, v)]['correlation']:.2f}"
+            for u, v in G.edges
+        }
+
+        nx.draw_networkx_edges(
+            G, pos,
+            edge_color=edge_colors,
+            width=edge_weights,
+            ax=ax
+        )
+        nx.draw_networkx_edge_labels(
+            G, pos,
+            edge_labels=edge_labels,
+            font_color='blue',
+            font_size=8,
+            ax=ax
+        )
 
         # Add legend for processes
-        process_legend = [plt.Line2D([0], [0], marker='o', color='w', label=proc,
-                                     markerfacecolor=process_color_mapping[proc], markersize=10) for proc in processes]
+        process_legend = [
+            plt.Line2D(
+                [0], [0], marker='o', color='w',
+                label=proc,
+                markerfacecolor=process_color_mapping[proc],
+                markersize=10
+            )
+            for proc in processes
+        ]
         ax.legend(handles=process_legend, title='Processes', loc='upper left', bbox_to_anchor=(1, 1))
 
-        # Add edge legend (positive/negative correlation)
+        # Add edge legend
         green_line = plt.Line2D([], [], color='green', marker='_', linestyle='-', label='Positive Correlation')
         red_line = plt.Line2D([], [], color='red', marker='_', linestyle='-', label='Negative Correlation')
         ax.legend(handles=[green_line, red_line], title='Correlation Sign', loc='upper left', bbox_to_anchor=(1, 0.9))
 
-        ax.set_title(f"Targeted Network Diagram for {selected_parameter} in {selected_process_label} (alpha={alpha})", fontsize=16, weight="bold")
+        ax.set_title(
+            f"Targeted Network Diagram for {selected_parameter} in {selected_process_label} (alpha={alpha})",
+            fontsize=16,
+            weight="bold"
+        )
         ax.axis('off')
         plt.tight_layout()
         st.pyplot(fig)
@@ -666,7 +895,6 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
         # Generate bar chart of correlation coefficients
         st.write("### Correlation Coefficients with Selected Parameter")
         fig_bar, ax_bar = plt.subplots(figsize=(10, 6))
-        import seaborn as sns
         sns.barplot(
             data=corr_data,
             x='Correlation',
@@ -677,7 +905,11 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
             ax=ax_bar
         )
         ax_bar.axvline(0, color='grey', linewidth=1)
-        ax_bar.set_title(f"Correlation Coefficients with {selected_parameter} in {selected_process_label}", fontsize=14, weight="bold")
+        ax_bar.set_title(
+            f"Correlation Coefficients with {selected_parameter} in {selected_process_label}",
+            fontsize=14,
+            weight="bold"
+        )
         ax_bar.set_xlabel('Correlation Coefficient')
         ax_bar.set_ylabel('Parameters')
         ax_bar.legend(title='Process', bbox_to_anchor=(1, 1))
@@ -691,6 +923,7 @@ def generate_targeted_network_diagram_streamlit(process_labels, dataframes, prog
             status_text.text("Targeted Network Diagram generated.")
         except Exception as e:
             st.error(f"Error updating progress bar: {e}")
+
 
 # -------------------------------
 # Main Streamlit App
