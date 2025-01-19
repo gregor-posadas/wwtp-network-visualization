@@ -308,23 +308,22 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
 
     st.subheader(f"{diagram_type} Network Diagram")
 
-    # Collect data for edge summary boxes
     edge_summaries = []
-
     total_connections = len(labels) - 1
+
     for i in range(len(labels) - 1):
-        st.write(f"[DEBUG] Processing connection: {labels[i]} → {labels[i + 1]}")
-
-        filtered_corr_matrix = correlation_matrices[i]
-        added_edges = set()
-
-        if globally_shared:
-            parameters_to_use = parameters
-        else:
-            parameters_to_use = parameters[i]
-
         node1 = labels[i]
         node2 = labels[i + 1]
+        st.write(f"[DEBUG] Processing connection: {node1} → {node2}")
+
+        filtered_corr_matrix = correlation_matrices[i]
+        st.write("[DEBUG] filtered_corr_matrix index:", filtered_corr_matrix.index.tolist())
+        st.write("[DEBUG] filtered_corr_matrix columns:", filtered_corr_matrix.columns.tolist())
+
+        added_edges = set()
+
+        # Decide which parameters to iterate
+        parameters_to_use = parameters if globally_shared else parameters[i]
 
         edge_summary = {
             'nodes': (node1, node2),
@@ -332,36 +331,49 @@ def generate_network_diagram_streamlit(labels, correlation_matrices, parameters,
         }
 
         for param in parameters_to_use:
-            edge_key = (node1, node2, param)
+            # Build the row/column names
             param1 = f"{param}_{node1}"
             param2 = f"{param}_{node2}"
 
+            # Debug prints for each attempt
+            st.write(f"[DEBUG] Checking param='{param}' => param1='{param1}' , param2='{param2}'")
+
+            # Does the row/column exist in the matrix?
             if param1 in filtered_corr_matrix.index and param2 in filtered_corr_matrix.columns:
                 corr_value = filtered_corr_matrix.loc[param1, param2]
-                if corr_value == 0 or edge_key in added_edges:
+                st.write(f"[DEBUG] Found param1, param2 in matrix. Correlation = {corr_value}")
+
+                if corr_value == 0:
+                    st.write("[DEBUG] correlation is 0, so no edge.")
                     continue
 
-                G.add_node(node1, label=node1)
-                G.add_node(node2, label=node2)
-                G.add_edge(
-                    node1,
-                    node2,
-                    parameter=param,
-                    correlation=corr_value,
-                    weight=abs(corr_value),
-                    key=param
-                )
-                added_edges.add(edge_key)
-                edge_summary['parameters'].append((param, corr_value))
+                edge_key = (node1, node2, param)
+                if edge_key not in added_edges:
+                    G.add_node(node1, label=node1)
+                    G.add_node(node2, label=node2)
+                    G.add_edge(
+                        node1,
+                        node2,
+                        parameter=param,
+                        correlation=corr_value,
+                        weight=abs(corr_value),
+                        key=param
+                    )
+                    added_edges.add(edge_key)
+                    edge_summary['parameters'].append((param, corr_value))
+                else:
+                    st.write("[DEBUG] Edge already added; skipping.")
+
+            else:
+                st.write("[DEBUG] param1 or param2 not found in the matrix index/columns.")
 
         if edge_summary['parameters']:
             edge_summaries.append(edge_summary)
 
         if progress_bar and status_text:
             progress = start_progress + (i +1)/total_connections * (end_progress - start_progress)
-            progress = max(0, min(1, progress))  # Clamp progress between 0 and 1
+            progress = max(0, min(1, progress))
             progress_bar.progress(int(progress * 100))
-
             status_text.text(f"Processing connection: {node1} → {node2}")
 
     if G.number_of_nodes() == 0:
