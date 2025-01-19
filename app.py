@@ -123,22 +123,56 @@ def find_common_parameters(dataframes):
 
     return list(common_columns)
 
+##############################
+# OUTLIER REMOVAL FUNCTIONS
+##############################
+
 def remove_outliers_zscore(df, threshold=3):
     """
-    Remove outliers from a DataFrame using the Z-score method.
+    Single-pass outlier removal. Only outlier cells become NaN,
+    preserving the rest of the row.
     """
-    st.write(f"Applying Z-Score Method to filter outliers (threshold={threshold})...")
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-    z_scores = np.abs(stats.zscore(df[numeric_cols], nan_policy="omit"))
-    outlier_mask = (z_scores >= threshold).any(axis=1)
+    import numpy as np
+    from scipy import stats
 
-    # Log flagged rows and retained rows
-    st.write(f"[DEBUG] Rows flagged as outliers:\n{df[outlier_mask]}")
-    filtered_df = df[~outlier_mask]
-    st.write(f"[DEBUG] Rows retained after outlier removal:\n{filtered_df}")
-    st.write(f"Outliers removed: {len(df) - len(filtered_df)}")
-    return filtered_df
+    df_clean = df.copy()
+    numeric_cols = df_clean.select_dtypes(include=[np.number]).columns
 
+    # Compute Z-scores for all numeric columns
+    zscores = df_clean[numeric_cols].apply(
+        lambda col: np.abs(stats.zscore(col, nan_policy='omit'))
+    )
+
+    # Replace only the outlier cells with NaN
+    for col in numeric_cols:
+        outlier_mask = (zscores[col] >= threshold)
+        df_clean.loc[outlier_mask, col] = np.nan
+
+    return df_clean
+
+
+def remove_outliers_zscore_per_parameter(df, threshold=3):
+    """
+    Iterative (column-by-column) outlier removal.
+    Only outlier cells become NaN, preserving other cells in the row.
+    After we finish with one column, we move on to the next column
+    using the updated DataFrame, which may already have NaNs.
+    """
+    import numpy as np
+    from scipy import stats
+
+    df_clean = df.copy()
+    numeric_cols = df_clean.select_dtypes(include=[np.number]).columns
+
+    for col in numeric_cols:
+        # Compute Z-scores on the current df_clean for just this column
+        col_z = np.abs(stats.zscore(df_clean[col], nan_policy='omit'))
+        # Flag cells exceeding threshold
+        outlier_mask = (col_z >= threshold)
+        # Replace outlier cells with NaN
+        df_clean.loc[outlier_mask, col] = np.nan
+
+    return df_clean
 
 def validate_correlation_matrix(df, n_iterations=500, alpha=0.05, progress_bar=None, status_text=None, start_progress=0.0, end_progress=1.0):
     import streamlit as st
@@ -618,19 +652,10 @@ def generate_targeted_network_diagram_streamlit(
     z_threshold=3
 ):
     """
-    Generate a targeted network diagram centered around a selected parameter from a selected process,
-    with per-parameter z-score outlier removal applied separately to each dataset BEFORE merging.
-
-    :param process_labels: List of labels corresponding to each uploaded/filtered dataset.
-    :param dataframes: List of cleaned (but not yet outlier-removed) DataFrames, one per process.
-    :param progress_bar: A Streamlit progress bar widget.
-    :param status_text: A Streamlit text element to display status updates.
-    :param progress_increment: The amount to increment progress when steps are completed.
-    :param n_iterations: Number of bootstrap iterations (default=500).
-    :param alpha: Significance level for correlation filtering (default=0.05).
-    :param z_threshold: Z-score threshold for outlier removal (default=3).
+    Generate a targeted network diagram centered around a selected parameter 
+    from a selected process, with iterative (column-by-column) outlier removal
+    applied to each dataset BEFORE merging.
     """
-
     import streamlit as st
     import pandas as pd
     import numpy as np
@@ -641,39 +666,11 @@ def generate_targeted_network_diagram_streamlit(
     from scipy import stats
     from sklearn.utils import resample
 
-    ###############################################
-    # 1) Define a helper: per-parameter z-score outlier removal
-    ###############################################
-    def remove_outliers_zscore_per_parameter(df, threshold=3):
-        """
-        Remove outliers column-by-column using Z-scores, i.e. for each numeric column,
-        any rows where that column's Z-score exceeds 'threshold' are removed.
-        This is repeated for each column iteratively.
-        """
-        df_clean = df.copy()
-        numeric_cols = df_clean.select_dtypes(include=[np.number]).columns
-        
-        for col in numeric_cols:
-            # Compute Z-scores for the current column only
-            # (nan_policy='omit' skips NaNs)
-            col_z = np.abs(stats.zscore(df_clean[col], nan_policy='omit'))
-            
-            # Identify rows where this column's absolute Z-score < threshold
-            non_outlier_mask = (col_z < threshold)
-            
-            # Keep only the non-outlier rows in df_clean
-            df_clean = df_clean[non_outlier_mask]
-            
-            # Because we've dropped rows, re-compute numeric_cols again
-            # if you want each column's outliers removed on the original distribution.
-            # Typically we do NOT recalc. We'll keep it simple:
-            # numeric_cols = df_clean.select_dtypes(include=[np.number]).columns
-        
-        return df_clean
-
+    # ---------------------------
+    # Ask user which process/parameter to center on
+    # ---------------------------
     st.write("### Targeted Network Diagram")
 
-    # User selects a process
     selected_process_label = st.selectbox(
         "Select a Process:",
         options=process_labels,
@@ -682,7 +679,6 @@ def generate_targeted_network_diagram_streamlit(
     process_choice = process_labels.index(selected_process_label)
     selected_dataframe = dataframes[process_choice]
 
-    # Display available parameters in the selected process
     available_parameters = selected_dataframe.columns.drop('date', errors='ignore')
     selected_parameter = st.selectbox(
         "Select a Parameter:",
@@ -690,7 +686,6 @@ def generate_targeted_network_diagram_streamlit(
         help="Choose the parameter to center the network diagram around."
     )
 
-    # User sets the significance level (alpha)
     alpha = st.number_input(
         "Set Significance Level (alpha):",
         min_value=0.0001,
@@ -700,87 +695,76 @@ def generate_targeted_network_diagram_streamlit(
         help="Adjust the significance level for correlation filtering."
     )
 
-    # Once user clicks the button, we run the targeted network logic
+    # Button to generate
     if st.button("Generate Targeted Network Diagram"):
-        st.write(f"Generating network diagram for **{selected_parameter}** in **{selected_process_label}** with alpha={alpha}, z-threshold={z_threshold}...")
-
-        # Initialize progress
+        st.write(f"Generating network for {selected_parameter} in {selected_process_label} with alpha={alpha}, z-threshold={z_threshold}...")
         progress = 0.0
         status_text.text("Starting targeted network generation...")
 
-        # 2) -----------------------------------------------------------------------------------
-        #    PER-PROCESS, PER-PARAMETER OUTLIER REMOVAL
-        #    (Instead of one global z-score across the merged DataFrame)
-        # 3) -----------------------------------------------------------------------------------
+        # ---------------------------------------------------------
+        # 1) Apply iterative outlier removal (column-by-column) to each dataset
+        # ---------------------------------------------------------
         cleaned_dataframes = []
         for idx, df in enumerate(dataframes):
-            # Keep a copy to preserve original
             df_local = df.copy()
-
-            # 2a) Only numeric columns get outlier removal
-            #     We keep 'date' aside if present
             date_col_present = 'date' in df_local.columns
             if date_col_present:
                 date_series = df_local['date']
-                df_local = df_local.drop(columns=['date'])
+                df_local.drop(columns=['date'], inplace=True)
 
-            # 2b) Apply column-by-column outlier removal
+            # Use the ITERATIVE function here
             df_local = remove_outliers_zscore_per_parameter(df_local, threshold=z_threshold)
 
-            # 2c) Re-attach date column if it existed
+            # Re-attach date if needed
             if date_col_present:
                 df_local['date'] = date_series
-                # Reorder to put 'date' first if desired
+                # Optional: reorder columns
                 df_local = df_local[['date'] + [c for c in df_local.columns if c != 'date']]
 
-            # Drop any remaining NaNs
+            # Replace infinite with NaN, drop rows with all-NaN
             df_local.replace([np.inf, -np.inf], np.nan, inplace=True)
-            df_local.dropna(inplace=True)
+            df_local.dropna(how='all', inplace=True)
 
             cleaned_dataframes.append(df_local)
 
-        progress += progress_increment * 0.20  # e.g., 20% for outlier removal
+        progress += progress_increment * 0.2
         progress_bar.progress(int(progress * 100))
-        status_text.text("Outlier removal completed. Merging data...")
+        status_text.text("Outlier removal done. Merging data...")
 
-        # 4) ------------------------------------------------------------------------------
-        #    MERGE ALL CLEANED DATAFRAMES, focusing on the selected parameter
-        # 5) ------------------------------------------------------------------------------
-        #    Because we want to see correlations with this param across all processes
-        combined_df = pd.DataFrame()
-
-        # Build combined_df by first taking your selected parameter from the chosen dataset
+        # ---------------------------------------------------------
+        # 2) Merge data for correlation analysis
+        # ---------------------------------------------------------
         main_df = cleaned_dataframes[process_choice].copy()
         if 'date' not in main_df.columns:
-            st.error(f"[ERROR] The chosen dataset '{selected_process_label}' has no 'date' column.")
+            st.error("Selected process has no 'date' column after cleaning.")
             return
 
-        # We want: date + the selected parameter (renamed <param>_<process>)
+        # We'll rename the selected parameter -> param_process
         target_param_full = f"{selected_parameter}_{selected_process_label}"
+
+        # Build main subset with just 'date' + selected_parameter
         main_df = main_df[['date', selected_parameter]].copy()
         main_df.columns = ['date', target_param_full]
 
-        # Next, for that same dataset, also add any other columns from it (prefix with the process label).
-        df_same_process = cleaned_dataframes[process_choice].drop(columns=[selected_parameter], errors='ignore').copy()
+        # Also add other columns from the same dataset, suffix with process label
+        df_same_proc = cleaned_dataframes[process_choice].drop(columns=[selected_parameter], errors='ignore').copy()
         new_cols = []
-        for c in df_same_process.columns:
+        for c in df_same_proc.columns:
             if c.lower() != 'date':
                 new_cols.append(f"{c}_{selected_process_label}")
             else:
                 new_cols.append(c)
-        df_same_process.columns = new_cols
+        df_same_proc.columns = new_cols
 
-        # Merge them on date
-        combined_df = pd.merge(main_df, df_same_process, on='date', how='inner')
+        combined_df = pd.merge(main_df, df_same_proc, on='date', how='inner')
 
-        # Include columns from other processes
-        for idx, df_other in enumerate(cleaned_dataframes):
+        # Merge in other processes
+        for idx, other_df in enumerate(cleaned_dataframes):
             if idx == process_choice:
-                continue  # Skip merging with itself again
-
+                continue
             proc_label = process_labels[idx]
-            df_temp = df_other.copy()
-            # Rename columns with suffix
+            df_temp = other_df.copy()
+
             renamed_cols = []
             for c in df_temp.columns:
                 if c.lower() != 'date':
@@ -789,61 +773,53 @@ def generate_targeted_network_diagram_streamlit(
                     renamed_cols.append(c)
             df_temp.columns = renamed_cols
 
-            # Merge with combined_df
             combined_df = pd.merge(combined_df, df_temp, on='date', how='inner')
 
-        # At this point, combined_df has date plus every column from every dataset
-        # with suffixes to identify processes.
-        # Drop date to keep just numeric for correlation
         if 'date' in combined_df.columns:
-            combined_df = combined_df.drop(columns=['date'])
+            combined_df.drop(columns=['date'], inplace=True)
 
-        # Final cleanup: remove leftover infinite or NaN
         combined_df.replace([np.inf, -np.inf], np.nan, inplace=True)
-        combined_df.dropna(inplace=True)
+        combined_df.dropna(how='any', inplace=True)
 
-        progress += progress_increment * 0.15  # e.g., +15% for merging
+        progress += progress_increment * 0.15
         progress_bar.progress(int(progress * 100))
-        status_text.text("Finished merging. Computing bootstrap correlations...")
+        status_text.text("Data merged. Computing bootstrap correlations...")
 
-        # 6) --------------------------------------------------------------------------------
-        #    BOOTSTRAPPING (Pearson, Spearman, Kendall) on the now-cleaned & merged combined_df
-        # 7) --------------------------------------------------------------------------------
+        # ---------------------------------------------------------
+        # 3) Bootstrap correlation (Pearson, Spearman, Kendall)
+        # ---------------------------------------------------------
         def local_bootstrap(df_local, iters, method):
             corr_list = []
             for _ in range(iters):
                 dfr = resample(df_local)
                 corr_matrix = dfr.corr(method=method)
                 corr_list.append(corr_matrix)
-            # Median correlation across all bootstrap iterations
             return pd.concat(corr_list).groupby(level=0).median()
 
-        pearson_corr = local_bootstrap(combined_df, n_iterations, 'pearson')
-        spearman_corr = local_bootstrap(combined_df, n_iterations, 'spearman')
-        kendall_corr = local_bootstrap(combined_df, n_iterations, 'kendall')
+        pearson = local_bootstrap(combined_df, n_iterations, 'pearson')
+        spearman = local_bootstrap(combined_df, n_iterations, 'spearman')
+        kendall = local_bootstrap(combined_df, n_iterations, 'kendall')
 
-        # Average them
-        avg_corr_matrix = (pearson_corr + spearman_corr + kendall_corr) / 3
-
-        progress += progress_increment * 0.30  # e.g. 30% for bootstrapping
+        avg_corr_matrix = (pearson + spearman + kendall) / 3
+        progress += progress_increment * 0.3
         progress_bar.progress(int(progress * 100))
-        status_text.text("Bootstrap complete. Calculating p-values...")
+        status_text.text("Bootstrap done. Calculating p-values...")
 
-        # 8) -----------------------------------------------------------------------------
-        #    P-value calculation: only for correlation with the target param
-        # 9) -----------------------------------------------------------------------------
+        # ---------------------------------------------------------
+        # 4) Filter correlations w.r.t. the target parameter
+        # ---------------------------------------------------------
         if target_param_full not in avg_corr_matrix.columns:
-            st.error(f"[DEBUG] The selected parameter '{selected_parameter}' is not available in the final merged dataset.")
+            st.error(f"Target param '{target_param_full}' is not in the matrix.")
             return
 
-        target_correlations = avg_corr_matrix[target_param_full].drop(target_param_full, errors='ignore')
+        target_corrs = avg_corr_matrix[target_param_full].drop(target_param_full, errors='ignore')
 
-        # Compute p-values for each other column w.r.t target_param_full using Pearson
+        # Compute p-values (Pearson) vs. target
         pvals = {}
         x = combined_df[target_param_full]
-        for col in target_correlations.index:
+        for col in target_corrs.index:
             y = combined_df[col]
-            if col == target_param_full or x.equals(y):
+            if col == target_param_full:
                 pvals[col] = 1.0
                 continue
             try:
@@ -856,89 +832,76 @@ def generate_targeted_network_diagram_streamlit(
             st.warning("No correlations to test.")
             return
 
+        import numpy as np
+        from statsmodels.stats.multitest import multipletests
         pvals_s = pd.Series(pvals)
-        # Correct p-values
         _, pvals_corr, _, _ = multipletests(pvals_s.values, alpha=alpha, method='fdr_bh')
         pvals_corr_s = pd.Series(pvals_corr, index=pvals_s.index)
-        mask_sig = (pvals_corr_s < alpha)
+        sig_mask = pvals_corr_s < alpha
 
-        if not mask_sig.any():
-            st.warning("No significant correlations found under the specified alpha.")
+        if not sig_mask.any():
+            st.warning("No significant correlations found under alpha.")
             return
 
-        # Gather significant correlations
-        sig_corr_vals = target_correlations[mask_sig]
+        sig_corr_vals = target_corrs[sig_mask]
         df_sig = pd.DataFrame({
             'Parameter': sig_corr_vals.index,
             'Correlation': sig_corr_vals.values,
-            'P-value': pvals_s[mask_sig],
-            'P-value (corrected)': pvals_corr_s[mask_sig],
+            'P-value': pvals_s[sig_mask],
+            'P-value (corrected)': pvals_corr_s[sig_mask],
         }).sort_values('Correlation', key=abs, ascending=False)
 
-        st.write("[DEBUG] Significant Correlations Table:")
+        st.write("Significant Correlations:")
         st.dataframe(df_sig)
 
-        progress += progress_increment * 0.20
+        progress += progress_increment * 0.2
         progress_bar.progress(int(progress * 100))
-        status_text.text("Building targeted network graph...")
+        status_text.text("Building targeted network...")
 
-        # 10) ---------------------------------------------------------------------------
-        #     BUILD NETWORKX GRAPH
-        # 11) ---------------------------------------------------------------------------
+        # ---------------------------------------------------------
+        # 5) Build and plot the network
+        # ---------------------------------------------------------
         G = nx.Graph()
         G.add_node(target_param_full, label=selected_parameter, process=selected_process_label)
 
-        # We'll parse out the process label for each correlated parameter
-        def split_process(param_with_process):
-            if '_' not in param_with_process:
+        def split_process(param_with_proc):
+            if '_' not in param_with_proc:
                 return ('???', '???')
-            # e.g. param_with_process = 'MLSS_ProcessA'
-            # so param_base='MLSS', param_proc='ProcessA'
-            *base_parts, last_part = param_with_process.split('_')
-            param_base = "_".join(base_parts)  # in case original param had underscores
+            *base_parts, last_part = param_with_proc.split('_')
+            param_base = "_".join(base_parts)
             param_proc = last_part
             return (param_base, param_proc)
 
         df_sig['Process'] = df_sig['Parameter'].apply(lambda x: split_process(x)[1])
         df_sig['Parameter Name'] = df_sig['Parameter'].apply(lambda x: split_process(x)[0])
 
-        # Separate internal vs. external correlations
         internal_corr = df_sig[df_sig['Process'] == selected_process_label]
         external_corr = df_sig[df_sig['Process'] != selected_process_label]
 
-        # Add internal edges
+        # Edges
         for _, row in internal_corr.iterrows():
-            param_node = row['Parameter']
-            G.add_node(param_node, label=row['Parameter Name'], process=row['Process'])
-            G.add_edge(
-                target_param_full, param_node,
-                correlation=row['Correlation'],
-                weight=abs(row['Correlation'])
-            )
+            node_name = row['Parameter']
+            G.add_node(node_name, label=row['Parameter Name'], process=row['Process'])
+            G.add_edge(target_param_full, node_name,
+                       correlation=row['Correlation'], weight=abs(row['Correlation']))
 
-        # Add external edges
         for _, row in external_corr.iterrows():
-            param_node = row['Parameter']
-            G.add_node(param_node, label=row['Parameter Name'], process=row['Process'])
-            G.add_edge(
-                target_param_full, param_node,
-                correlation=row['Correlation'],
-                weight=abs(row['Correlation'])
-            )
+            node_name = row['Parameter']
+            G.add_node(node_name, label=row['Parameter Name'], process=row['Process'])
+            G.add_edge(target_param_full, node_name,
+                       correlation=row['Correlation'], weight=abs(row['Correlation']))
 
-        if G.number_of_nodes() <= 1:
-            st.warning("No other nodes to show in the targeted network.")
+        if G.number_of_nodes() < 2:
+            st.warning("No other nodes to show.")
             return
 
-        # 12) --------------------------------------------------------------------------
-        #     DRAW THE NETWORK
-        # 13) --------------------------------------------------------------------------
+        # Plot
         pos = nx.spring_layout(G, seed=42)
-        # Separate internal vs external to shift them visually, if desired
-        internal_nodes = [n for n in G.nodes if G.nodes[n]['process'] == selected_process_label and n != target_param_full]
+        internal_nodes = [n for n in G.nodes
+                          if G.nodes[n]['process'] == selected_process_label and n != target_param_full]
         external_nodes = [n for n in G.nodes if G.nodes[n]['process'] != selected_process_label]
 
-        # Shift internal nodes slightly left, external slightly right
+        # Shift them
         for nd in internal_nodes:
             pos[nd][0] -= 0.5
         for nd in external_nodes:
@@ -946,47 +909,35 @@ def generate_targeted_network_diagram_streamlit(
 
         fig, ax = plt.subplots(figsize=(14, 10))
         processes = list(set(nx.get_node_attributes(G, 'process').values()))
-        cmap = plt.get_cmap('tab20')
+        cmap = plt.cm.tab20
         colors = [cmap(i / len(processes)) for i in range(len(processes))]
-        process_color_mapping = dict(zip(processes, colors))
+        process_color_map = dict(zip(processes, colors))
 
-        node_colors = [process_color_mapping[G.nodes[n]['process']] for n in G.nodes]
+        node_colors = [process_color_map[G.nodes[n]['process']] for n in G.nodes]
         nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=3000, ax=ax)
 
-        # Node labels
         labels_dict = {
-            n: f"{G.nodes[n]['label']}\n({G.nodes[n]['process']})"
-            for n in G.nodes
+            n: f"{G.nodes[n]['label']}\n({G.nodes[n]['process']})" for n in G.nodes
         }
         nx.draw_networkx_labels(G, pos, labels=labels_dict, font_size=10, ax=ax)
 
-        # Edge style: green for positive, red for negative
+        # Edge color: green for positive, red for negative
         edge_colors = [
             'green' if G.edges[e]['correlation'] > 0 else 'red'
             for e in G.edges
         ]
-        edge_weights = [abs(G.edges[e]['correlation']) * 5 for e in G.edges]
+        widths = [abs(G.edges[e]['correlation']) * 5 for e in G.edges]
         edge_labels = {
-            (u, v): f"{G.edges[(u, v)]['correlation']:.2f}"
-            for u, v in G.edges
+            (u, v): f"{G.edges[u, v]['correlation']:.2f}" for u, v in G.edges
         }
 
-        nx.draw_networkx_edges(G, pos, edge_color=edge_colors, width=edge_weights, ax=ax)
+        nx.draw_networkx_edges(G, pos, edge_color=edge_colors, width=widths, ax=ax)
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='blue', font_size=8, ax=ax)
 
         # Legend
-        proc_legend = [
-            plt.Line2D([0], [0], marker='o', color='w', label=pr,
-                       markerfacecolor=process_color_mapping[pr], markersize=10)
-            for pr in processes
-        ]
-        legend1 = ax.legend(handles=proc_legend, title='Processes', loc='upper left', bbox_to_anchor=(1, 1))
-
-        green_line = plt.Line2D([], [], color='green', marker='_', linestyle='-', label='Positive Corr')
-        red_line = plt.Line2D([], [], color='red', marker='_', linestyle='-', label='Negative Corr')
-        legend2 = ax.legend(handles=[green_line, red_line], title='Correlation Sign',
-                            loc='upper left', bbox_to_anchor=(1, 0.85))
-        ax.add_artist(legend1)  # So they both show
+        import matplotlib.patches as mpatches
+        node_legend = [mpatches.Patch(color=process_color_map[pr], label=pr) for pr in processes]
+        ax.legend(handles=node_legend, title="Processes", loc='upper left', bbox_to_anchor=(1, 1))
 
         ax.set_title(
             f"Targeted Network Diagram for {selected_parameter} in {selected_process_label}\n"
@@ -997,9 +948,7 @@ def generate_targeted_network_diagram_streamlit(
         plt.tight_layout()
         st.pyplot(fig)
 
-        # 14) ----------------------------------------------------------------------------
-        #     OPTIONAL: BAR CHART OF SIGNIFICANT CORRELATIONS
-        # 15) ----------------------------------------------------------------------------
+        # Optional bar chart
         st.write("### Correlation Coefficients with Selected Parameter")
         fig_bar, ax_bar = plt.subplots(figsize=(10, 6))
         sns.barplot(
@@ -1022,11 +971,9 @@ def generate_targeted_network_diagram_streamlit(
         plt.tight_layout()
         st.pyplot(fig_bar)
 
-        # Final progress update
-        progress = min(progress + progress_increment * 0.15, 1.0)
+        progress += progress_increment * 0.15
         progress_bar.progress(int(progress * 100))
-        status_text.text("Targeted Network Diagram generation complete.")
-
+        status_text.text("Targeted Network Diagram complete!")
 
 # -------------------------------
 # Main Streamlit App
