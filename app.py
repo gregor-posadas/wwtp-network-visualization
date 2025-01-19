@@ -209,6 +209,9 @@ def validate_correlation_matrix(df, n_iterations=500, alpha=0.05, progress_bar=N
 
     avg_corr_matrix = (pearson_corr + spearman_corr + kendall_corr) / 3
 
+    st.write("[DEBUG] Raw averaged correlation matrix (before significance filtering):")
+    st.dataframe(avg_corr_matrix)
+
     st.write("[DEBUG] Calculating and correcting p-values now...")
     p_values = calculate_p_values(df, method='pearson')
 
@@ -219,8 +222,19 @@ def validate_correlation_matrix(df, n_iterations=500, alpha=0.05, progress_bar=N
 
     corrected_p_values = correct_p_values(p_values)
 
+    st.write("[DEBUG] Corrected p-values (FDR):")
+    st.dataframe(corrected_p_values)
+    if 'do' in corrected_p_values.index:
+        st.write("[DEBUG] Corrected P-values for 'do':")
+        st.write(corrected_p_values.loc['do', :])
+
     sig_mask = (corrected_p_values < alpha).astype(int)
     filtered_corr_matrix = avg_corr_matrix.where(sig_mask > 0).fillna(0)
+
+    st.write("[DEBUG] Final filtered correlation matrix (after p < alpha):")
+    st.dataframe(filtered_corr_matrix)
+    if 'do' in filtered_corr_matrix.index:
+        st.write("[DEBUG] 'do' row in final matrix:", filtered_corr_matrix.loc['do', :])
 
     st.write("[DEBUG] Correlation matrix validated and filtered based on significance.")
     st.write(f"[DEBUG] filtered_corr_matrix shape: {filtered_corr_matrix.shape}")
