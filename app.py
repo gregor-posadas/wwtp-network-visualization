@@ -1045,6 +1045,19 @@ def main():
                 df = remove_outliers_zscore(df)
                 dataframes.append(df)
 
+                debug_common_params_1 = find_common_parameters(dataframes)
+                st.write("[DEBUG] Common parameters BEFORE date filtering:", debug_common_params_1)
+
+
+                st.write(f"[DEBUG] Finished reading/cleaning file {uploaded_file.name}")
+                st.write(f"[DEBUG] Columns = {df.columns.tolist()}")
+                if 'do' in df.columns:
+                    do_notna = df['do'].notna().sum()
+                    total_rows = len(df)
+                    st.write(f"[DEBUG] 'DO' non-NaN count: {do_notna} / {total_rows}")
+                else:
+                    st.write("[DEBUG] 'DO' column is missing or was dropped!")
+
                 # Prompt user for a label for this process
                 label = st.text_input(
                     f"Enter a label for **{uploaded_file.name}**:",
@@ -1146,6 +1159,10 @@ def main():
             filtered_df = df[(df['date'] >= pd.to_datetime(start_date)) & (df['date'] <= pd.to_datetime(end_date))]
             dataframes_filtered.append(filtered_df)
             st.write(f"**{process_labels_sorted[idx]}**: {len(filtered_df)} records after filtering.")
+        
+        debug_common_params_2 = find_common_parameters(dataframes_filtered)
+        st.write("[DEBUG] Common parameters AFTER date filtering:", debug_common_params_2)
+
 
         # Update the dataframes_sorted to the filtered dataframes
         dataframes_sorted = dataframes_filtered
