@@ -713,7 +713,7 @@ def generate_targeted_network_diagram_streamlit(
                 df_local.drop(columns=['date'], inplace=True)
 
             # Use the ITERATIVE function here
-            df_local = remove_outliers_zscore_per_parameter(df_local, threshold=z_threshold)
+            df_local = remove_outliers_zscore(df_local, threshold=z_threshold)
 
             # Re-attach date if needed
             if date_col_present:
